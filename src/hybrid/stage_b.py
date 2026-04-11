@@ -1,0 +1,2 @@
+class StageBJudge:
+    pass

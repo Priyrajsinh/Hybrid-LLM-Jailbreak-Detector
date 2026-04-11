@@ -1,0 +1,2 @@
+class StageAClassifier:
+    pass
