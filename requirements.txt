@@ -29,7 +29,6 @@ peft
 datasets
 accelerate
 gradio>=5.0
-gradio-modal
 faiss-cpu
 sentence-transformers
 captum
