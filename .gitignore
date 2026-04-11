@@ -13,6 +13,7 @@ build/
 .claude/
 CLAUDE.md
 learning_log.md
+explain.md
 data/raw/*.csv
 data/raw/*.jsonl
 models/stage_a_adapter/
