@@ -22,3 +22,12 @@ warn_unused_configs = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["error::DeprecationWarning"]
+
+[tool.coverage.run]
+omit = [
+    "src/training/*",
+    "src/evaluation/*",
+    "src/baseline/*",
+    "src/ui/gradio_app.py",
+    "src/api/stream.py",
+]
