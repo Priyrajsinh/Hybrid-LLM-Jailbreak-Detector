@@ -1,5 +1,8 @@
 import logging
+import os
+import tempfile
 
+import pandas as pd
 import pytest
 
 from src.api.schemas import ClassifyRequest, ClassifyResponse
@@ -194,3 +197,120 @@ def test_feedback_store_instantiable():
 
     store = FeedbackStore()
     assert store is not None
+
+
+# ── Day 2: Dataset schema tests ────────────────────────────────────────────────
+
+
+def _make_valid_df(n: int = 3) -> pd.DataFrame:
+    """Build a minimal valid DataFrame for schema tests."""
+    return pd.DataFrame(
+        {
+            "sample_id": [f"id_{i}" for i in range(n)],
+            "text": [f"sample text number {i}" for i in range(n)],
+            "label": [0, 1, 2][:n],
+            "source_dataset": ["test_src"] * n,
+            "source_type": ["user_only"] * n,
+            "language": ["en"] * n,
+            "is_multiturn": [False] * n,
+        }
+    )
+
+
+def test_schema_validates_correct_data():
+    """Valid DataFrame must pass Pandera validation without raising."""
+    from src.data.schema import DATASET_SCHEMA
+
+    df = _make_valid_df(3)
+    validated = DATASET_SCHEMA.validate(df)
+    assert len(validated) == 3
+
+
+def test_schema_rejects_invalid_label():
+    """A row with label=5 must fail Pandera validation."""
+    import pandera
+
+    from src.data.schema import DATASET_SCHEMA
+
+    df = _make_valid_df(3)
+    df.loc[0, "label"] = 5
+    with pytest.raises(pandera.errors.SchemaError):
+        DATASET_SCHEMA.validate(df)
+
+
+def test_schema_rejects_empty_text():
+    """A row with empty text must fail Pandera validation."""
+    import pandera
+
+    from src.data.schema import DATASET_SCHEMA
+
+    df = _make_valid_df(3)
+    df.loc[0, "text"] = ""
+    with pytest.raises(pandera.errors.SchemaError):
+        DATASET_SCHEMA.validate(df)
+
+
+def test_is_multiturn_always_false():
+    """All rows produced by collect helpers must have is_multiturn=False."""
+    df = _make_valid_df(3)
+    assert (df["is_multiturn"] == False).all()  # noqa: E712
+
+
+def test_checksums_computed():
+    """compute_checksums must return dict with required keys."""
+    from src.data.validate import compute_checksums
+
+    df = _make_valid_df(3)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_path = os.path.join(tmpdir, "checksums.json")
+        result = compute_checksums(df, output_path=out_path)
+
+    assert "full_csv_sha256" in result
+    assert "num_rows" in result
+    assert "num_columns" in result
+    assert "label_distribution" in result
+    assert result["num_rows"] == 3
+
+
+def test_splits_stratified():
+    """Label distribution in train/val/test must be roughly proportional."""
+    from src.data.pipeline import split_and_save
+
+    # Build a balanced dataset large enough for stratified split
+    n_per_class = 30
+    rows = []
+    for label in [0, 1, 2]:
+        for i in range(n_per_class):
+            rows.append(
+                {
+                    "sample_id": f"{label}_{i}",
+                    "text": f"text {label} {i}",
+                    "label": label,
+                    "source_dataset": "test",
+                    "source_type": "user_only",
+                    "language": "en",
+                    "is_multiturn": False,
+                }
+            )
+    df = pd.DataFrame(rows)
+    config = {
+        "data": {"train_split": 0.70, "val_split": 0.15, "test_split": 0.15, "seed": 42}
+    }
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        import src.data.pipeline as pipeline_mod
+
+        orig_dir = pipeline_mod.PROCESSED_DIR
+        pipeline_mod.PROCESSED_DIR = tmpdir
+        try:
+            splits = split_and_save(df, config)
+        finally:
+            pipeline_mod.PROCESSED_DIR = orig_dir
+
+    for split_name, split_df in splits.items():
+        dist = split_df["label"].value_counts(normalize=True)
+        for label in [0, 1, 2]:
+            # Each class should be within 15% of expected 33%
+            assert (
+                abs(dist.get(label, 0) - 1 / 3) < 0.15
+            ), f"Split '{split_name}' label {label} not stratified: {dist.to_dict()}"
