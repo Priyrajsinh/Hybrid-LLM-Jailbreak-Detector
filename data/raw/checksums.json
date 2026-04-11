@@ -1,0 +1,17 @@
+{
+  "full_csv_sha256": "a3038ec543adb43490e4eeed5f24131a9052bc462b22f6c97256f8b9362b3495",
+  "col_sample_id_sha256": "987255bcd0a8d3c1987a86df5733a3d0b3f5ed6a106a7c74746ed96a4721e00e",
+  "col_text_sha256": "4b35ce6121754e2b3954dcb5c7634ad1636fa21d4a884e1c970617c97a54dead",
+  "col_label_sha256": "f053de342e82dc6ddb5ae85d48d54bc04d7d9195a94edefc5d09f8986f3f6d58",
+  "col_source_dataset_sha256": "a6cc143d076f0fca3b587b55746dfcc4f74e21c29a19471040c16d45f3f221b7",
+  "col_source_type_sha256": "2ca161795cfbdfeb607765e11394b02e27b12c955ac1b52abbffd0cf3642de5c",
+  "col_language_sha256": "4ae68516aead35c93807e14b180b621497bc574aaf5bc9224028864be2027d78",
+  "col_is_multiturn_sha256": "6ebb2f3844469e6a942b2890bf079b332e0599cf0f3a0cc8ba7a48875e355bbb",
+  "num_rows": 500,
+  "num_columns": 7,
+  "label_distribution": {
+    "2": 200,
+    "0": 200,
+    "1": 100
+  }
+}
