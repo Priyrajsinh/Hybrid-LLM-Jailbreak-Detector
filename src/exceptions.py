@@ -16,3 +16,7 @@ class ClassificationError(ProjectBaseError):
 
 class PolicyViolationError(ProjectBaseError):
     pass
+
+
+class SchemaValidationError(ProjectBaseError):
+    pass
