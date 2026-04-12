@@ -1,0 +1,16 @@
+{
+  "project": "P1-Hybrid-Jailbreak-Detector",
+  "benchmarks": [
+    {
+      "model": "TF-IDF + LinearSVC (baseline)",
+      "accuracy": 0.9867,
+      "weighted_f1": 0.9867,
+      "jailbreak_recall": 1.0,
+      "indirect_recall": 0.9667,
+      "false_positive_rate_safe": 0.0,
+      "latency_p50_ms": 1.99,
+      "latency_p95_ms": 2.46,
+      "date": "2026-04-12"
+    }
+  ]
+}
