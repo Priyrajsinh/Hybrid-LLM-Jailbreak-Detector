@@ -33,9 +33,7 @@ def _make_mini_parquet(path: str) -> None:
             rows.append(
                 {
                     "sample_id": f"{label}_{i}",
-                    "text": (
-                        f"class {label} example sentence number {i} extra"
-                    ),
+                    "text": (f"class {label} example sentence number {i} extra"),
                     "label": label,
                     "source_dataset": "test_src",
                     "source_type": "user_input",
