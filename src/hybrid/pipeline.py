@@ -19,7 +19,10 @@ _PERPLEXITY_TOKENIZER: Optional[Any] = None
 
 def _load_perplexity_model() -> None:  # pragma: no cover - heavy download path
     global _PERPLEXITY_MODEL, _PERPLEXITY_TOKENIZER
-    from transformers import GPT2LMHeadModel, GPT2TokenizerFast
+    from transformers import (  # type: ignore[attr-defined]
+        GPT2LMHeadModel,
+        GPT2TokenizerFast,
+    )
 
     _PERPLEXITY_TOKENIZER = GPT2TokenizerFast.from_pretrained("gpt2")  # nosec B615
     _PERPLEXITY_MODEL = GPT2LMHeadModel.from_pretrained("gpt2")  # nosec B615
