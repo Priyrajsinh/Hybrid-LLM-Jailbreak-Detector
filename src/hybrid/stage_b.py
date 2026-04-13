@@ -1,2 +1,128 @@
+"""Stage B: Llama Guard 3 escalation judge (runs only when escalation triggers)."""
+
+from typing import Any, Optional
+
+from src.logger import get_logger
+
+# Llama Guard 3 18-category taxonomy (S1..S18).
+LLAMA_GUARD_CATEGORIES: tuple[str, ...] = (
+    "S1_violent_crimes",
+    "S2_non_violent_crimes",
+    "S3_sex_crimes",
+    "S4_child_exploitation",
+    "S5_defamation",
+    "S6_specialized_advice",
+    "S7_privacy",
+    "S8_intellectual_property",
+    "S9_indiscriminate_weapons",
+    "S10_hate",
+    "S11_self_harm",
+    "S12_sexual_content",
+    "S13_elections",
+    "S14_code_interpreter_abuse",
+    "S15_misinformation",
+    "S16_prompt_injection",
+    "S17_unsafe_tool_use",
+    "S18_jailbreak",
+)
+
+
 class StageBJudge:
-    pass
+    """Pluggable adapter around Llama Guard 3. Escalation-only — never batch."""
+
+    def __init__(
+        self,
+        config: dict[str, Any],
+        model: Optional[Any] = None,
+        tokenizer: Optional[Any] = None,
+    ) -> None:
+        stage_cfg: dict[str, Any] = config["model"]["stage_b"]
+        self._model_name: str = str(stage_cfg["model_name"])
+        self._enabled: bool = bool(stage_cfg.get("enabled", True))
+        self._model = model
+        self._tokenizer = tokenizer
+        self._logger = get_logger(__name__)
+
+    def _ensure_loaded(self) -> None:
+        if self._model is not None and self._tokenizer is not None:
+            return
+        # pragma: no cover - heavy gated model path
+        from transformers import (  # pragma: no cover
+            AutoModelForCausalLM,
+            AutoTokenizer,
+        )
+
+        self._tokenizer = AutoTokenizer.from_pretrained(  # pragma: no cover
+            self._model_name
+        )
+        self._model = AutoModelForCausalLM.from_pretrained(  # pragma: no cover
+            self._model_name
+        )
+
+    def judge(self, text: str, stage_a_result: dict[str, Any]) -> dict[str, Any]:
+        """Return a Llama-Guard-shaped verdict dict.
+
+        Only called by HybridPipeline when PolicyGate.should_escalate() is True.
+        """
+        if not self._enabled:
+            return {
+                "is_safe": True,
+                "violation_categories": [],
+                "risk_score": 0.0,
+            }
+
+        self._ensure_loaded()
+        assert self._tokenizer is not None
+        assert self._model is not None
+
+        prompt = self._build_prompt(text)
+        import torch
+
+        encoded = self._tokenizer(prompt, return_tensors="pt")
+        with torch.no_grad():
+            output_ids = self._model.generate(**encoded, max_new_tokens=64)
+        response_text = self._tokenizer.decode(output_ids[0], skip_special_tokens=True)
+        verdict = self._parse_response(response_text)
+        self._logger.info(
+            "stage_b_judged",
+            extra={
+                "is_safe": verdict["is_safe"],
+                "n_categories": len(verdict["violation_categories"]),
+                "stage_a_label": stage_a_result.get("label"),
+            },
+        )
+        return verdict
+
+    def _build_prompt(self, text: str) -> str:
+        cats = "\n".join(f"- {c}" for c in LLAMA_GUARD_CATEGORIES)
+        return (
+            "Task: Check if the following user message is safe against the "
+            "Llama Guard 3 taxonomy.\n"
+            f"Categories:\n{cats}\n\n"
+            f"User message: {text}\n\n"
+            "Respond with 'safe' or 'unsafe' followed by matching category codes."
+        )
+
+    @staticmethod
+    def _parse_response(response: str) -> dict[str, Any]:
+        lowered = response.lower()
+        is_unsafe = "unsafe" in lowered
+        is_safe = not is_unsafe
+
+        matched: list[str] = []
+        for cat in LLAMA_GUARD_CATEGORIES:
+            code = cat.split("_", 1)[0]  # e.g. "S16"
+            if code.lower() in lowered or cat.lower() in lowered:
+                matched.append(cat)
+
+        if is_safe:
+            risk_score = 0.0
+        elif matched:
+            risk_score = 0.9
+        else:
+            risk_score = 0.6
+        return {
+            "is_safe": is_safe,
+            "violation_categories": matched,
+            "risk_score": risk_score,
+        }
