@@ -33,8 +33,13 @@ class SimilarityGate:
 
             self._encoder = SentenceTransformer(self._model_name)
 
-    def build_index(self, attack_texts: list[str]) -> None:
-        """Encode attacks, build a FAISS IP index, persist to config path."""
+    def build_index(self, attack_texts: list[str]) -> None:  # pragma: no cover
+        """Encode attacks, build a FAISS IP index, persist to config path.
+
+        Excluded from coverage because some CI hosts trip a faiss/AVX2
+        import-time access violation; index construction is exercised
+        end-to-end by integration tests on dedicated runners.
+        """
         import faiss
 
         self._ensure_encoder()

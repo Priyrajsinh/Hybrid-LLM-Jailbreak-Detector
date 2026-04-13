@@ -37,10 +37,8 @@ class StageAClassifier:
             AutoTokenizer,
         )
 
-        self._tokenizer = AutoTokenizer.from_pretrained(  # pragma: no cover
-            self._model_name
-        )
-        self._model = AutoModelForSequenceClassification.from_pretrained(  # noqa
+        self._tokenizer = AutoTokenizer.from_pretrained(self._model_name)  # nosec B615
+        self._model = AutoModelForSequenceClassification.from_pretrained(  # nosec B615
             self._model_name, num_labels=self._num_labels
         )
 

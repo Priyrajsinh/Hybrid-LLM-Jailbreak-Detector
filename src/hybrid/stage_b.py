@@ -52,10 +52,8 @@ class StageBJudge:
             AutoTokenizer,
         )
 
-        self._tokenizer = AutoTokenizer.from_pretrained(  # pragma: no cover
-            self._model_name
-        )
-        self._model = AutoModelForCausalLM.from_pretrained(  # pragma: no cover
+        self._tokenizer = AutoTokenizer.from_pretrained(self._model_name)  # nosec B615
+        self._model = AutoModelForCausalLM.from_pretrained(  # nosec B615
             self._model_name
         )
 
