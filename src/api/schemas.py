@@ -35,4 +35,4 @@ class ClassifyResponse(BaseModel):
     stage_used: str
     similarity_score: Optional[float] = None
     perplexity_score: Optional[float] = None
-    token_attributions: Optional[list[dict[str, float]]] = None
+    token_attributions: Optional[list[dict[str, str | float]]] = None
