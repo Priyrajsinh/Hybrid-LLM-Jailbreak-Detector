@@ -28,6 +28,9 @@ module = [
     "captum.*",
     "transformers.*",
     "torch.*",
+    "peft",
+    "peft.*",
+    "weave",
 ]
 ignore_missing_imports = true
 
