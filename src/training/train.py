@@ -26,6 +26,50 @@ def _compute_class_weights(labels: np.ndarray, num_labels: int) -> np.ndarray:
     return weights.astype(np.float32)  # type: ignore[no-any-return]
 
 
+def _tokenize_dataset(
+    tokenizer: Any,
+    texts: list[str],
+    labels: list[int],
+    max_length: int,
+) -> Any:
+    import torch
+    from torch.utils.data import Dataset
+
+    over_limit = 0
+    for t in texts:
+        enc = tokenizer(t, truncation=False, add_special_tokens=True)
+        if len(enc["input_ids"]) > max_length:
+            over_limit += 1
+    if over_limit:
+        logger.warning(
+            "truncating samples exceeding max_length",
+            extra={"n_over": over_limit, "max_length": max_length},
+        )
+
+    class _DS(Dataset):  # type: ignore[type-arg,misc]
+        def __init__(self) -> None:
+            self.enc = tokenizer(
+                texts,
+                truncation=True,
+                padding="max_length",
+                max_length=max_length,
+                return_tensors="pt",
+            )
+            self.labels = torch.tensor(labels, dtype=torch.long)
+
+        def __len__(self) -> int:
+            return int(self.labels.shape[0])
+
+        def __getitem__(self, idx: int) -> dict[str, Any]:
+            return {
+                "input_ids": self.enc["input_ids"][idx],
+                "attention_mask": self.enc["attention_mask"][idx],
+                "labels": self.labels[idx],
+            }
+
+    return _DS()
+
+
 def train_stage_a(config: dict[str, Any]) -> None:
     """Train ModernBERT + LoRA Stage A classifier (stub)."""
     raise NotImplementedError
