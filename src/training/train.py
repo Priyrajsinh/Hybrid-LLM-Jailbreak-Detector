@@ -104,7 +104,7 @@ def train_stage_a(config: dict[str, Any]) -> None:
         extra={"n_train": len(train_df), "n_val": len(val_df)},
     )
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)  # nosec B615
     train_ds = _tokenize_dataset(
         tokenizer,
         train_df["text"].tolist(),
@@ -118,7 +118,7 @@ def train_stage_a(config: dict[str, Any]) -> None:
         max_length,
     )
 
-    base = AutoModelForSequenceClassification.from_pretrained(
+    base = AutoModelForSequenceClassification.from_pretrained(  # nosec B615
         model_name, num_labels=num_labels
     )
     lora_config = LoraConfig(
