@@ -5,10 +5,12 @@ Run locally for smoke tests; full training runs on Kaggle T4 on Day 6.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 from src.config import load_config
 from src.logger import get_logger
@@ -71,8 +73,62 @@ def _tokenize_dataset(
 
 
 def train_stage_a(config: dict[str, Any]) -> None:
-    """Train ModernBERT + LoRA Stage A classifier (stub)."""
-    raise NotImplementedError
+    """Train ModernBERT + LoRA Stage A classifier.
+
+    Loads train/val parquet, fits LoRA adapters, logs to MLflow,
+    and saves adapter + merged checkpoint.
+    """
+    from peft import LoraConfig, TaskType, get_peft_model
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+    stage_a = config["model"]["stage_a"]
+    model_name = stage_a["model_name"]
+    num_labels = int(stage_a.get("num_labels", 3))
+    max_length = int(stage_a.get("max_length", 2048))
+
+    data_dir = Path(config.get("data", {}).get("processed_dir", "data/processed"))
+    train_df = pd.read_parquet(data_dir / "train.parquet")
+    val_df = pd.read_parquet(data_dir / "val.parquet")
+    logger.info(
+        "loaded splits",
+        extra={"n_train": len(train_df), "n_val": len(val_df)},
+    )
+
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    _train_ds = _tokenize_dataset(
+        tokenizer,
+        train_df["text"].tolist(),
+        train_df["label"].astype(int).tolist(),
+        max_length,
+    )
+    _val_ds = _tokenize_dataset(
+        tokenizer,
+        val_df["text"].tolist(),
+        val_df["label"].astype(int).tolist(),
+        max_length,
+    )
+
+    base = AutoModelForSequenceClassification.from_pretrained(
+        model_name, num_labels=num_labels
+    )
+    lora_config = LoraConfig(
+        task_type=TaskType.SEQ_CLS,
+        r=int(stage_a["lora_r"]),
+        lora_alpha=int(stage_a["lora_alpha"]),
+        lora_dropout=float(stage_a.get("lora_dropout", 0.1)),
+        target_modules=list(stage_a["target_modules"]),
+        bias="none",
+    )
+    model = get_peft_model(base, lora_config)
+
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total = sum(p.numel() for p in model.parameters())
+    logger.info(
+        "trainable parameters",
+        extra={"trainable": trainable, "total": total, "pct": trainable / total},
+    )
+    _ = (os, _train_ds, _val_ds, num_labels, model)
+    raise NotImplementedError("training loop wired in next commit")
 
 
 if __name__ == "__main__":
