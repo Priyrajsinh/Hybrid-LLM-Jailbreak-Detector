@@ -191,11 +191,12 @@ def train_stage_a(config: dict[str, Any]) -> None:
             for batch in train_loader:
                 batch = {k: v.to(device) for k, v in batch.items()}
                 optimizer.zero_grad()
-                out = model(
-                    input_ids=batch["input_ids"],
-                    attention_mask=batch["attention_mask"],
-                )
-                loss = loss_fn(out.logits, batch["labels"])
+                with torch.autocast(device.type, enabled=(device.type == "cuda")):
+                    out = model(
+                        input_ids=batch["input_ids"],
+                        attention_mask=batch["attention_mask"],
+                    )
+                    loss = loss_fn(out.logits, batch["labels"])
                 loss.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
@@ -211,11 +212,12 @@ def train_stage_a(config: dict[str, Any]) -> None:
             with torch.no_grad():
                 for batch in val_loader:
                     batch = {k: v.to(device) for k, v in batch.items()}
-                    out = model(
-                        input_ids=batch["input_ids"],
-                        attention_mask=batch["attention_mask"],
-                    )
-                    val_loss += float(loss_fn(out.logits, batch["labels"]).item())
+                    with torch.autocast(device.type, enabled=(device.type == "cuda")):
+                        out = model(
+                            input_ids=batch["input_ids"],
+                            attention_mask=batch["attention_mask"],
+                        )
+                        val_loss += float(loss_fn(out.logits, batch["labels"]).item())
                     preds = out.logits.argmax(dim=-1)
                     correct += int((preds == batch["labels"]).sum().item())
                     seen += int(batch["labels"].shape[0])
