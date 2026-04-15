@@ -2,3 +2,5 @@
 *.png linguist-generated=true
 *.pkl linguist-generated=true
 reports/** linguist-generated=true
+scripts/kaggle_train.ipynb linguist-generated=true
+models/manifests/*.json linguist-generated=true
