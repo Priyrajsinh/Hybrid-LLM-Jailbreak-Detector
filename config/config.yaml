@@ -46,7 +46,7 @@ onnx:
   optimize: true
 
 training:
-  batch_size: 32
+  batch_size: 4
   epochs: 5
   learning_rate: 1.0e-4
   warmup_ratio: 0.1
