@@ -11,6 +11,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import f1_score
 
 from src.config import load_config
 from src.logger import get_logger
@@ -173,6 +174,7 @@ def train_stage_a(config: dict[str, Any]) -> None:
         mlflow.log_metric("trainable_params", trainable)
 
         best_val_loss = float("inf")
+        best_val_f1 = 0.0
         bad_epochs = 0
         for epoch in range(epochs):
             model.train()
@@ -194,6 +196,8 @@ def train_stage_a(config: dict[str, Any]) -> None:
             val_loss = 0.0
             correct = 0
             seen = 0
+            all_preds: list[int] = []
+            all_labels_val: list[int] = []
             with torch.no_grad():
                 for batch in val_loader:
                     out = model(
@@ -204,8 +208,17 @@ def train_stage_a(config: dict[str, Any]) -> None:
                     preds = out.logits.argmax(dim=-1)
                     correct += int((preds == batch["labels"]).sum().item())
                     seen += int(batch["labels"].shape[0])
+                    all_preds.extend([int(x) for x in preds.cpu().tolist()])
+                    all_labels_val.extend(
+                        [int(x) for x in batch["labels"].cpu().tolist()]
+                    )
 
             val_acc = correct / max(seen, 1)
+            val_f1 = float(
+                f1_score(all_labels_val, all_preds, average="macro", zero_division=0)
+            )
+            if val_f1 > best_val_f1:
+                best_val_f1 = val_f1
             logger.info(
                 "epoch complete",
                 extra={
@@ -213,11 +226,13 @@ def train_stage_a(config: dict[str, Any]) -> None:
                     "train_loss": epoch_loss / max(len(train_loader), 1),
                     "val_loss": val_loss / max(len(val_loader), 1),
                     "val_acc": val_acc,
+                    "val_f1": val_f1,
                 },
             )
             mlflow.log_metric("train_loss", epoch_loss, step=epoch)
             mlflow.log_metric("val_loss", val_loss, step=epoch)
             mlflow.log_metric("val_acc", val_acc, step=epoch)
+            mlflow.log_metric("val_f1", val_f1, step=epoch)
 
             if os.environ.get("ENABLE_WEAVE") == "1":
                 try:
@@ -228,6 +243,7 @@ def train_stage_a(config: dict[str, Any]) -> None:
                             "epoch": epoch,
                             "val_loss": val_loss,
                             "val_acc": val_acc,
+                            "val_f1": val_f1,
                         }
                     )
                 except Exception as exc:  # pragma: no cover
@@ -244,6 +260,8 @@ def train_stage_a(config: dict[str, Any]) -> None:
                     )
                     break
 
+        mlflow.log_metric("best_val_f1", best_val_f1)
+
         ADAPTER_DIR.mkdir(parents=True, exist_ok=True)
         model.save_pretrained(str(ADAPTER_DIR))
         logger.info("saved adapter", extra={"path": str(ADAPTER_DIR)})
@@ -258,4 +276,11 @@ def train_stage_a(config: dict[str, Any]) -> None:
 
 
 if __name__ == "__main__":
-    train_stage_a(load_config())
+    import argparse
+
+    _parser = argparse.ArgumentParser(description="Train Stage A LoRA adapter")
+    _parser.add_argument(
+        "--config", default="config/config.yaml", help="Path to config.yaml"
+    )
+    _args = _parser.parse_args()
+    train_stage_a(load_config(_args.config))
