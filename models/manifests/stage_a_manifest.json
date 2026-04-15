@@ -2,7 +2,7 @@
   "model_name": "answerdotai/ModernBERT-base",
   "lora_r": 16,
   "lora_alpha": 32,
-  "target_modules": ["q_proj", "v_proj"],
+  "target_modules": ["Wqkv", "Wo"],
   "max_length": 2048,
   "training_samples": 0,
   "epochs_completed": 0,

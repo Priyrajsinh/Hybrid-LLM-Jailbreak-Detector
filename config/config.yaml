@@ -19,7 +19,7 @@ model:
     lora_r: 16
     lora_alpha: 32
     lora_dropout: 0.1
-    target_modules: ["q_proj", "v_proj"]
+    target_modules: ["Wqkv", "Wo"]
   stage_b:
     model_name: "meta-llama/Llama-Guard-3-8B"
     enabled: true
