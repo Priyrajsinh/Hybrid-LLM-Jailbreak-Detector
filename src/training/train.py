@@ -11,7 +11,6 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import f1_score
 
 from src.config import load_config
 from src.logger import get_logger
@@ -82,6 +81,7 @@ def train_stage_a(config: dict[str, Any]) -> None:
     import mlflow
     import torch
     from peft import LoraConfig, TaskType, get_peft_model
+    from sklearn.metrics import f1_score
     from torch import nn
     from torch.optim import AdamW
     from torch.utils.data import DataLoader
