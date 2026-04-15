@@ -146,7 +146,7 @@ def train_stage_a(config: dict[str, Any]) -> None:
     class_weights_np = _compute_class_weights(
         train_df["label"].astype(int).to_numpy(), num_labels
     )
-    class_weights = torch.tensor(class_weights_np, dtype=torch.float32)
+    class_weights = torch.tensor(class_weights_np, dtype=torch.float32).to(device)
     loss_fn = nn.CrossEntropyLoss(weight=class_weights)
 
     batch_size = int(tcfg["batch_size"])
