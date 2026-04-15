@@ -27,4 +27,3 @@ data/faiss_index/
 data/feedback.db
 models/stage_a_onnx/
 carry.md
-=2.0
