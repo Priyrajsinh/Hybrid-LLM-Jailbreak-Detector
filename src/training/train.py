@@ -119,8 +119,9 @@ def train_stage_a(config: dict[str, Any]) -> None:
         max_length,
     )
 
+    attn_impl = stage_a.get("attn_implementation", "sdpa")
     base = AutoModelForSequenceClassification.from_pretrained(  # nosec B615
-        model_name, num_labels=num_labels
+        model_name, num_labels=num_labels, attn_implementation=attn_impl
     )
     lora_config = LoraConfig(
         task_type=TaskType.SEQ_CLS,
