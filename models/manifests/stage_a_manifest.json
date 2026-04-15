@@ -1,0 +1,16 @@
+{
+  "model_name": "answerdotai/ModernBERT-base",
+  "lora_r": 16,
+  "lora_alpha": 32,
+  "target_modules": ["q_proj", "v_proj"],
+  "max_length": 2048,
+  "training_samples": 0,
+  "epochs_completed": 0,
+  "best_val_f1": 0.0,
+  "training_device": "T4",
+  "onnx_exported": false,
+  "onnx_path": "models/stage_a_onnx/",
+  "onnx_speedup_ratio": 1.0,
+  "date": "2026-04-15",
+  "_note": "Placeholder — update with real values after Kaggle T4 training run."
+}
