@@ -31,6 +31,10 @@ module = [
     "peft",
     "peft.*",
     "weave",
+    "optimum",
+    "optimum.*",
+    "onnxruntime",
+    "onnxruntime.*",
 ]
 ignore_missing_imports = true
 
