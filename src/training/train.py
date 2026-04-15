@@ -205,6 +205,7 @@ def train_stage_a(config: dict[str, Any]) -> None:
             all_labels_val: list[int] = []
             with torch.no_grad():
                 for batch in val_loader:
+                    batch = {k: v.to(device) for k, v in batch.items()}
                     out = model(
                         input_ids=batch["input_ids"],
                         attention_mask=batch["attention_mask"],
