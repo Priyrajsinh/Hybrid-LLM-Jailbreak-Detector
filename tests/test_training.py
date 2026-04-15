@@ -69,6 +69,8 @@ def _fake_model_factory() -> MagicMock:
 
     model = MagicMock()
     model.parameters.return_value = [torch.zeros(1, requires_grad=True)]
+    # model.to(device) must return the same mock so .parameters() stays configured
+    model.to.return_value = model
 
     def fwd(**kwargs: object) -> MagicMock:
         bs = kwargs["input_ids"].shape[0]  # type: ignore[union-attr]
