@@ -14,12 +14,13 @@ data:
 model:
   stage_a:
     model_name: "answerdotai/ModernBERT-base"
-    max_length: 2048
+    max_length: 512
     num_labels: 3
     lora_r: 16
     lora_alpha: 32
     lora_dropout: 0.1
     target_modules: ["Wqkv", "Wo"]
+    attn_implementation: "sdpa"
   stage_b:
     model_name: "meta-llama/Llama-Guard-3-8B"
     enabled: true
