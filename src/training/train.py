@@ -184,6 +184,7 @@ def train_stage_a(config: dict[str, Any]) -> None:
             model.train()
             epoch_loss = 0.0
             for batch in train_loader:
+                batch = {k: v.to(device) for k, v in batch.items()}
                 optimizer.zero_grad()
                 out = model(
                     input_ids=batch["input_ids"],
