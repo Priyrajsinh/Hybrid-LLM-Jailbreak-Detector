@@ -137,6 +137,10 @@ def train_stage_a(config: dict[str, Any]) -> None:
     model = model.to(device)
     logger.info("training device", extra={"device": str(device)})
 
+    model.enable_input_require_grads()
+    model.gradient_checkpointing_enable()
+    logger.info("gradient checkpointing enabled")
+
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total = sum(p.numel() for p in model.parameters())
     logger.info(
