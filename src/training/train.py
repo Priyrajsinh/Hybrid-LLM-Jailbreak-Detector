@@ -132,6 +132,10 @@ def train_stage_a(config: dict[str, Any]) -> None:
     )
     model = get_peft_model(base, lora_config)
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+    logger.info("training device", extra={"device": str(device)})
+
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total = sum(p.numel() for p in model.parameters())
     logger.info(
