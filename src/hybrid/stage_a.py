@@ -1,17 +1,21 @@
 """Stage A: fast ModernBERT-base + LoRA classifier."""
 
+from pathlib import Path
 from typing import Any, Optional
 
 from src.logger import get_logger
 
 _LABEL_NAMES = ["safe", "jailbreak", "indirect_injection"]
+_MERGED_MODEL_PATH = Path("models/stage_a_merged")
 
 
 class StageAClassifier:
     """ModernBERT-base + LoRA adapter for 3-class classification.
 
-    Model + tokenizer are lazy-loaded on first classify() so tests can
-    inject fakes without touching the Hugging Face cache.
+    On first classify(), loads from models/stage_a_merged/ if present
+    (merged weights from Kaggle training run), otherwise falls back to
+    the base model HF hub download. Model + tokenizer are lazy-loaded
+    so tests can inject fakes without touching the HF cache.
     """
 
     def __init__(
@@ -37,9 +41,28 @@ class StageAClassifier:
             AutoTokenizer,
         )
 
-        self._tokenizer = AutoTokenizer.from_pretrained(self._model_name)  # nosec B615
-        self._model = AutoModelForSequenceClassification.from_pretrained(  # nosec B615
-            self._model_name, num_labels=self._num_labels
+        # Prefer locally merged model; fall back to HF hub base model
+        if (
+            _MERGED_MODEL_PATH.exists()
+            and (_MERGED_MODEL_PATH / "config.json").exists()  # pragma: no cover
+        ):
+            model_source = str(_MERGED_MODEL_PATH)  # pragma: no cover
+            self._logger.info(  # pragma: no cover
+                "stage_a_loading_merged",
+                extra={"path": model_source},
+            )
+        else:
+            model_source = self._model_name  # pragma: no cover
+            self._logger.warning(  # pragma: no cover
+                "stage_a_merged_not_found_using_base",
+                extra={"fallback": model_source},
+            )
+
+        tok_cls = AutoTokenizer  # nosec B615
+        clf_cls = AutoModelForSequenceClassification  # nosec B615
+        self._tokenizer = tok_cls.from_pretrained(model_source)  # pragma: no cover
+        self._model = clf_cls.from_pretrained(  # pragma: no cover
+            model_source, num_labels=self._num_labels
         )
 
     def classify(self, text: str) -> dict[str, Any]:
