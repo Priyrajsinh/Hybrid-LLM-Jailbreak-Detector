@@ -16,6 +16,7 @@ learning_log.md
 explain.md
 data/raw/*.csv
 data/raw/*.jsonl
+data/processed/
 models/stage_a_adapter/
 models/stage_a_merged/
 models/baseline/*.pkl
