@@ -15,6 +15,7 @@ CLAUDE.md
 learning_log.md
 explain.md
 data/raw/*.csv
+!data/raw/harmful_behaviors.csv
 data/raw/*.jsonl
 data/processed/
 models/stage_a_adapter/
