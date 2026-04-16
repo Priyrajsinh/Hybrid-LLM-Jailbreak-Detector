@@ -152,3 +152,20 @@ def run_pipeline(config: dict[str, Any]) -> None:
     build_faiss_index(splits["train"])
 
     logger.info("=== Data Pipeline Complete ===")
+
+
+if __name__ == "__main__":
+    import argparse
+
+    logging.basicConfig(level=logging.INFO)
+    parser = argparse.ArgumentParser(description="Build processed splits + FAISS index")
+    parser.add_argument(
+        "--config",
+        default="config/config.yaml",
+        help="Path to config.yaml (default: config/config.yaml)",
+    )
+    _args = parser.parse_args()
+
+    from src.config import load_config
+
+    run_pipeline(load_config(_args.config))
