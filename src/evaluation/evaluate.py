@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from datetime import date
 from pathlib import Path
 from typing import Any, Optional
 
@@ -606,13 +607,16 @@ def compare_baseline_vs_hybrid(
         "latency_p50_ms",
         "latency_p95_ms",
     ]
+    today = str(date.today())
     baseline_row: dict[str, str | float] = {
         "model": "TF-IDF + LinearSVC (baseline)",
         **{k: baseline_metrics[k] for k in _scalar_keys},
+        "date": today,
     }
     hybrid_row: dict[str, str | float] = {
         "model": "Stage A ModernBERT LoRA (hybrid)",
         **{k: hybrid_metrics[k] for k in _scalar_keys},
+        "date": today,
     }
 
     # Update results.json

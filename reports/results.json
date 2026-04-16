@@ -9,7 +9,8 @@
       "indirect_recall": 0.9667,
       "false_positive_rate_safe": 0.0323,
       "latency_p50_ms": 3.52,
-      "latency_p95_ms": 4.05
+      "latency_p95_ms": 4.05,
+      "date": "2026-04-16"
     },
     {
       "model": "Stage A ModernBERT LoRA (hybrid)",
@@ -19,7 +20,8 @@
       "indirect_recall": 0.9667,
       "false_positive_rate_safe": 0.0645,
       "latency_p50_ms": 122.67,
-      "latency_p95_ms": 224.34
+      "latency_p95_ms": 224.34,
+      "date": "2026-04-16"
     }
   ]
 }
