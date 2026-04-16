@@ -3,14 +3,23 @@
   "benchmarks": [
     {
       "model": "TF-IDF + LinearSVC (baseline)",
-      "accuracy": 0.9867,
-      "weighted_f1": 0.9867,
+      "accuracy": 0.9605,
+      "weighted_f1": 0.9606,
+      "jailbreak_recall": 0.9333,
+      "indirect_recall": 0.9667,
+      "false_positive_rate_safe": 0.0323,
+      "latency_p50_ms": 3.52,
+      "latency_p95_ms": 4.05
+    },
+    {
+      "model": "Stage A ModernBERT LoRA (hybrid)",
+      "accuracy": 0.9605,
+      "weighted_f1": 0.9605,
       "jailbreak_recall": 1.0,
       "indirect_recall": 0.9667,
-      "false_positive_rate_safe": 0.0,
-      "latency_p50_ms": 1.99,
-      "latency_p95_ms": 2.46,
-      "date": "2026-04-12"
+      "false_positive_rate_safe": 0.0645,
+      "latency_p50_ms": 122.67,
+      "latency_p95_ms": 224.34
     }
   ]
 }
