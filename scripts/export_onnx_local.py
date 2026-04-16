@@ -31,7 +31,7 @@ if __name__ == "__main__":
         )
         sys.exit(1)
 
-    print(f"Exporting {_MERGED_PATH} → {_ONNX_PATH} …")
+    print(f"Exporting {_MERGED_PATH} -> {_ONNX_PATH} ...")
     export_to_onnx(_MERGED_PATH, _ONNX_PATH, cfg)
     print("Export complete.")
 
