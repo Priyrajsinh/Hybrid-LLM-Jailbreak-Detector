@@ -107,46 +107,45 @@ def collect_advbench_csv(max_samples: int | None = None) -> pd.DataFrame:
     return result
 
 
-def collect_wildjailbreak(max_samples: int | None = None) -> pd.DataFrame:
+def collect_jackhhao_jailbreak(max_samples: int | None = None) -> pd.DataFrame:
     """
-    Load jailbreak prompts from allenai/wildjailbreak (public HF dataset, streamed).
-    Label=1 (jailbreak). Default cap: 500 rows.
+    Load jailbreak prompts from jackhhao/jailbreak-classification (public HF dataset).
+    Combines train + test splits, filters for type='jailbreak'. Label=1 (jailbreak).
+    Default cap: 700 rows.
+
+    Replaces allenai/wildjailbreak which is a gated dataset.
     """
     from datasets import load_dataset  # type: ignore[import-untyped]
 
-    cap = max_samples if max_samples is not None else 500
-    logger.info("Loading allenai/wildjailbreak (cap=%d)", cap)
-
-    def _try_load() -> "Any":  # type: ignore[return]
-        for kwargs in [
-            {"name": "vanilla", "split": "train", "streaming": True},
-            {"split": "train", "streaming": True},
-        ]:
-            try:
-                return load_dataset("allenai/wildjailbreak", **kwargs)  # nosec B615
-            except Exception:
-                continue
-        raise RuntimeError("allenai/wildjailbreak: no loadable config found")
+    cap = max_samples if max_samples is not None else 700
+    logger.info("Loading jackhhao/jailbreak-classification (cap=%d)", cap)
 
     try:
-        ds = _try_load()
         rows: list[dict[str, Any]] = []
-        for item in ds:
+        for split_name in ["train", "test"]:
             if len(rows) >= cap:
                 break
-            text = ""
-            for field in ["vanilla", "forbidden_prompt", "prompt", "text"]:
-                text = str(item.get(field, "")).strip()
-                if text:
+            ds = load_dataset(  # nosec B615
+                "jackhhao/jailbreak-classification",
+                split=split_name,
+                streaming=True,
+            )
+            for item in ds:
+                if len(rows) >= cap:
                     break
-            if not text:
-                continue
-            rows.append(_build_row(text, 1, "wildjailbreak", "user_only", len(rows)))
+                if str(item.get("type", "")).lower() != "jailbreak":
+                    continue
+                text = str(item.get("prompt", "")).strip()
+                if not text:
+                    continue
+                rows.append(
+                    _build_row(text, 1, "jackhhao_jailbreak", "user_only", len(rows))
+                )
         result = pd.DataFrame(rows if rows else [], columns=SCHEMA_COLUMNS)
-        logger.info("WildJailbreak: %d rows loaded", len(result))
+        logger.info("jackhhao/jailbreak-classification: %d rows loaded", len(result))
         return result
     except Exception as exc:
-        logger.warning("WildJailbreak unavailable: %s", exc)
+        logger.warning("jackhhao/jailbreak-classification unavailable: %s", exc)
         return pd.DataFrame(columns=SCHEMA_COLUMNS)
 
 
@@ -220,84 +219,43 @@ def collect_prompt_injections(max_samples: int | None = None) -> pd.DataFrame:
     return df
 
 
-def collect_bipia_slices(max_samples: int | None = None) -> pd.DataFrame:
+def collect_spml_injections(max_samples: int | None = None) -> pd.DataFrame:
     """
-    Load BIPIA (Benchmark for Indirect Prompt Injection Attacks) slices.
-    Label=2 (indirect_injection). Loads email and web slices.
+    Load prompt injection examples from reshabhs/SPML_Chatbot_Prompt_Injection.
+    Filters rows where 'Prompt injection' == 1. Uses the 'User Prompt' field.
+    Label=2 (indirect_injection). Default cap: 500 rows.
+
+    Replaces microsoft/BIPIA (inaccessible) and hackaprompt (gated).
     """
     from datasets import load_dataset  # type: ignore[import-untyped]
 
-    logger.info("Loading BIPIA benchmark slices")
-    rows: list[dict[str, Any]] = []
-    slices: list[tuple[str, str]] = [
-        ("email", "email"),
-        ("web", "web"),
-    ]
-    for slice_name, source_type in slices:
-        if max_samples is not None and len(rows) >= max_samples:
-            break
-        try:
-            ds = load_dataset("microsoft/BIPIA", slice_name, split="test")  # nosec B615
-            for i, item in enumerate(ds):
-                if max_samples is not None and len(rows) >= max_samples:
-                    break
-                text = item.get("attack") or item.get("text") or item.get("input") or ""
-                text = str(text).strip()
-                if not text:
-                    continue
-                rows.append(
-                    _build_row(
-                        text,
-                        2,
-                        f"bipia_{slice_name}",
-                        source_type,
-                        len(rows),
-                    )
-                )
-            logger.info("BIPIA %s: %d rows loaded", slice_name, i + 1)
-        except Exception as exc:
-            logger.warning("BIPIA %s slice unavailable: %s", slice_name, exc)
-    if not rows:
-        # Fallback: HackAPrompt competition dataset (public, prompt injection attempts)
-        cap = max_samples if max_samples is not None else 500
-        try:
-            from datasets import load_dataset  # type: ignore[import-untyped]
+    cap = max_samples if max_samples is not None else 500
+    logger.info("Loading reshabhs/SPML_Chatbot_Prompt_Injection (cap=%d)", cap)
 
-            for split_name in ["train", "test", "validation"]:
-                try:
-                    ds_hack = load_dataset(  # nosec B615
-                        "hackaprompt/hackaprompt-dataset",
-                        split=split_name,
-                        streaming=True,
-                    )
-                    for item in ds_hack:
-                        if len(rows) >= cap:
-                            break
-                        if not item.get("injection_successful", False):
-                            continue
-                        text = ""
-                        for field in ["user_input", "prompt", "text", "input"]:
-                            text = str(item.get(field, "")).strip()
-                            if text:
-                                break
-                        if not text:
-                            continue
-                        rows.append(
-                            _build_row(
-                                text, 2, "hackaprompt", "retrieved_doc", len(rows)
-                            )
-                        )
-                    if rows:
-                        break
-                except Exception:
-                    continue
-            logger.info("HackAPrompt fallback: %d rows loaded", len(rows))
-        except Exception as exc:
-            logger.warning("HackAPrompt unavailable: %s", exc)
-
-    df = pd.DataFrame(rows if rows else [], columns=SCHEMA_COLUMNS)
-    logger.info("BIPIA total: %d rows loaded", len(df))
-    return df
+    try:
+        ds = load_dataset(  # nosec B615
+            "reshabhs/SPML_Chatbot_Prompt_Injection",
+            split="train",
+            streaming=True,
+        )
+        rows: list[dict[str, Any]] = []
+        for item in ds:
+            if len(rows) >= cap:
+                break
+            if int(item.get("Prompt injection", 0)) != 1:
+                continue
+            text = str(item.get("User Prompt", "")).strip()
+            if not text:
+                continue
+            rows.append(
+                _build_row(text, 2, "spml_injections", "retrieved_doc", len(rows))
+            )
+        result = pd.DataFrame(rows if rows else [], columns=SCHEMA_COLUMNS)
+        logger.info("SPML_Chatbot_Prompt_Injection: %d rows loaded", len(result))
+        return result
+    except Exception as exc:
+        logger.warning("SPML_Chatbot_Prompt_Injection unavailable: %s", exc)
+        return pd.DataFrame(columns=SCHEMA_COLUMNS)
 
 
 def collect_safe_corpus(max_samples: int | None = None) -> pd.DataFrame:
@@ -354,11 +312,15 @@ def collect_all_sources(config: dict[str, Any]) -> pd.DataFrame:
     Merge all 5 sources into a unified DataFrame with the canonical schema.
 
     Sources collected:
-      1. JailbreakBench    — label=1 (jailbreak)
-      2. AdvBench          — label=1 (jailbreak)
-      3. deepset/prompt-injections — label=2 (indirect_injection)
-      4. BIPIA slices      — label=2 (indirect_injection)
-      5. c4/OpenWebText    — label=0 (safe)
+      1. JailbreakBench               — label=1 (jailbreak)
+      2. AdvBench (CSV + fallback)    — label=1 (jailbreak)
+      3. jackhhao/jailbreak-classification — label=1 (jailbreak)
+      4. deepset/prompt-injections    — label=2 (indirect_injection)
+      5. SPML_Chatbot_Prompt_Injection — label=2 (indirect_injection)
+      6. c4/OpenWebText               — label=0 (safe)
+
+    Config keys: wildjailbreak and bipia_slices are kept for backward
+    compatibility and route to jackhhao and spml_injections respectively.
 
     is_multiturn is always False. See module docstring for rationale.
     """
@@ -377,11 +339,15 @@ def collect_all_sources(config: dict[str, Any]) -> pd.DataFrame:
     if "advbench_csv" in sources:
         frames.append(collect_advbench_csv(max_per_source))
     if "wildjailbreak" in sources:
-        frames.append(collect_wildjailbreak(max_per_source))
+        frames.append(collect_jackhhao_jailbreak(max_per_source))
+    if "jackhhao" in sources:
+        frames.append(collect_jackhhao_jailbreak(max_per_source))
     if "deepset_prompt_injections" in sources:
         frames.append(collect_prompt_injections(max_per_source))
     if "bipia_slices" in sources:
-        frames.append(collect_bipia_slices(max_per_source))
+        frames.append(collect_spml_injections(max_per_source))
+    if "spml_injections" in sources:
+        frames.append(collect_spml_injections(max_per_source))
     if "safe_corpus" in sources:
         frames.append(collect_safe_corpus(max_per_source))
 
