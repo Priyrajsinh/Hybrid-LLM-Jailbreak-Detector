@@ -35,6 +35,10 @@ module = [
     "optimum.*",
     "onnxruntime",
     "onnxruntime.*",
+    "pandas",
+    "pandas.*",
+    "matplotlib",
+    "matplotlib.*",
 ]
 ignore_missing_imports = true
 
