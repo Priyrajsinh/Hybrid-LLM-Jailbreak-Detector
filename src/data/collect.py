@@ -81,6 +81,75 @@ def collect_jailbreakbench(max_samples: int | None = None) -> pd.DataFrame:
     return df
 
 
+def collect_advbench_csv(max_samples: int | None = None) -> pd.DataFrame:
+    """
+    Load AdvBench harmful behaviors from local CSV at data/raw/harmful_behaviors.csv.
+    Label=1 (jailbreak). Skips gracefully if file is absent.
+    """
+    import os
+
+    csv_path = os.path.join("data", "raw", "harmful_behaviors.csv")
+    if not os.path.exists(csv_path):
+        logger.warning("AdvBench CSV not found at %s — skipping", csv_path)
+        return pd.DataFrame(columns=SCHEMA_COLUMNS)
+
+    df_raw = pd.read_csv(csv_path)
+    rows: list[dict[str, Any]] = []
+    for i, row in df_raw.iterrows():
+        if max_samples is not None and len(rows) >= max_samples:
+            break
+        text = str(row.get("goal", "")).strip()
+        if not text:
+            continue
+        rows.append(_build_row(text, 1, "advbench_csv", "user_only", len(rows)))
+    result = pd.DataFrame(rows if rows else [], columns=SCHEMA_COLUMNS)
+    logger.info("AdvBench CSV: %d rows loaded", len(result))
+    return result
+
+
+def collect_wildjailbreak(max_samples: int | None = None) -> pd.DataFrame:
+    """
+    Load jailbreak prompts from allenai/wildjailbreak (public HF dataset, streamed).
+    Label=1 (jailbreak). Default cap: 500 rows.
+    """
+    from datasets import load_dataset  # type: ignore[import-untyped]
+
+    cap = max_samples if max_samples is not None else 500
+    logger.info("Loading allenai/wildjailbreak (cap=%d)", cap)
+
+    def _try_load() -> "Any":  # type: ignore[return]
+        for kwargs in [
+            {"name": "vanilla", "split": "train", "streaming": True},
+            {"split": "train", "streaming": True},
+        ]:
+            try:
+                return load_dataset("allenai/wildjailbreak", **kwargs)  # nosec B615
+            except Exception:
+                continue
+        raise RuntimeError("allenai/wildjailbreak: no loadable config found")
+
+    try:
+        ds = _try_load()
+        rows: list[dict[str, Any]] = []
+        for item in ds:
+            if len(rows) >= cap:
+                break
+            text = ""
+            for field in ["vanilla", "forbidden_prompt", "prompt", "text"]:
+                text = str(item.get(field, "")).strip()
+                if text:
+                    break
+            if not text:
+                continue
+            rows.append(_build_row(text, 1, "wildjailbreak", "user_only", len(rows)))
+        result = pd.DataFrame(rows if rows else [], columns=SCHEMA_COLUMNS)
+        logger.info("WildJailbreak: %d rows loaded", len(result))
+        return result
+    except Exception as exc:
+        logger.warning("WildJailbreak unavailable: %s", exc)
+        return pd.DataFrame(columns=SCHEMA_COLUMNS)
+
+
 def collect_advbench(max_samples: int | None = None) -> pd.DataFrame:
     """
     Load harmful instructions from AdvBench. Label=1 (jailbreak).
@@ -188,6 +257,44 @@ def collect_bipia_slices(max_samples: int | None = None) -> pd.DataFrame:
             logger.info("BIPIA %s: %d rows loaded", slice_name, i + 1)
         except Exception as exc:
             logger.warning("BIPIA %s slice unavailable: %s", slice_name, exc)
+    if not rows:
+        # Fallback: HackAPrompt competition dataset (public, prompt injection attempts)
+        cap = max_samples if max_samples is not None else 500
+        try:
+            from datasets import load_dataset  # type: ignore[import-untyped]
+
+            for split_name in ["train", "test", "validation"]:
+                try:
+                    ds_hack = load_dataset(  # nosec B615
+                        "hackaprompt/hackaprompt-dataset",
+                        split=split_name,
+                        streaming=True,
+                    )
+                    for item in ds_hack:
+                        if len(rows) >= cap:
+                            break
+                        if not item.get("injection_successful", False):
+                            continue
+                        text = ""
+                        for field in ["user_input", "prompt", "text", "input"]:
+                            text = str(item.get(field, "")).strip()
+                            if text:
+                                break
+                        if not text:
+                            continue
+                        rows.append(
+                            _build_row(
+                                text, 2, "hackaprompt", "retrieved_doc", len(rows)
+                            )
+                        )
+                    if rows:
+                        break
+                except Exception:
+                    continue
+            logger.info("HackAPrompt fallback: %d rows loaded", len(rows))
+        except Exception as exc:
+            logger.warning("HackAPrompt unavailable: %s", exc)
+
     df = pd.DataFrame(rows if rows else [], columns=SCHEMA_COLUMNS)
     logger.info("BIPIA total: %d rows loaded", len(df))
     return df
@@ -201,7 +308,7 @@ def collect_safe_corpus(max_samples: int | None = None) -> pd.DataFrame:
     from datasets import load_dataset  # type: ignore[import-untyped]
 
     logger.info("Loading safe corpus")
-    cap = max_samples if max_samples is not None else 5000
+    cap = max_samples if max_samples is not None else 15000
     rows: list[dict[str, Any]] = []
 
     try:
@@ -267,6 +374,10 @@ def collect_all_sources(config: dict[str, Any]) -> pd.DataFrame:
         frames.append(collect_jailbreakbench(max_per_source))
     if "advbench" in sources:
         frames.append(collect_advbench(max_per_source))
+    if "advbench_csv" in sources:
+        frames.append(collect_advbench_csv(max_per_source))
+    if "wildjailbreak" in sources:
+        frames.append(collect_wildjailbreak(max_per_source))
     if "deepset_prompt_injections" in sources:
         frames.append(collect_prompt_injections(max_per_source))
     if "bipia_slices" in sources:
