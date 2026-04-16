@@ -2,6 +2,8 @@ data:
   sources:
     - jailbreakbench
     - advbench
+    - advbench_csv
+    - wildjailbreak
     - deepset_prompt_injections
     - bipia_slices
     - safe_corpus
