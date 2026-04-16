@@ -177,6 +177,8 @@ def train_stage_a(config: dict[str, Any]) -> None:
                 "lora_r": stage_a["lora_r"],
                 "lora_alpha": stage_a["lora_alpha"],
                 "max_length": max_length,
+                "n_train": len(train_df),
+                "n_val": len(val_df),
                 **{f"train_{k}": v for k, v in tcfg.items()},
             }
         )
