@@ -3,9 +3,9 @@ data:
     - jailbreakbench
     - advbench
     - advbench_csv
-    - wildjailbreak
+    - jackhhao
     - deepset_prompt_injections
-    - bipia_slices
+    - spml_injections
     - safe_corpus
   train_split: 0.70
   val_split: 0.15
