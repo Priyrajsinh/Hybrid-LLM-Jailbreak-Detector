@@ -13,10 +13,11 @@ from src.data.collect import (
     _make_sample_id,
     collect_advbench,
     collect_all_sources,
-    collect_bipia_slices,
+    collect_jackhhao_jailbreak,
     collect_jailbreakbench,
     collect_prompt_injections,
     collect_safe_corpus,
+    collect_spml_injections,
 )
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -143,20 +144,68 @@ def test_collect_prompt_injections_filters_safe():
     assert len(df) == 0
 
 
-# ── collect_bipia_slices ──────────────────────────────────────────────────────
+# ── collect_jackhhao_jailbreak ────────────────────────────────────────────────
 
 
-def test_collect_bipia_slices_label():
-    fake_items = [{"attack": f"bipia attack {i}"} for i in range(3)]
-    with patch("datasets.load_dataset", return_value=fake_items):
-        df = collect_bipia_slices()
+def test_collect_jackhhao_jailbreak_label():
+    fake_items = [
+        {"prompt": f"jailbreak prompt {i}", "type": "jailbreak"} for i in range(3)
+    ]
+    with patch("datasets.load_dataset", return_value=iter(fake_items)):
+        df = collect_jackhhao_jailbreak()
+    assert (df["label"] == 1).all()
+    assert (df["source_dataset"] == "jackhhao_jailbreak").all()
+
+
+def test_collect_jackhhao_jailbreak_filters_benign():
+    """Rows with type != 'jailbreak' must be excluded."""
+    fake_items = [
+        {"prompt": "benign text", "type": "benign"},
+        {"prompt": "attack text", "type": "jailbreak"},
+    ]
+    with patch("datasets.load_dataset", return_value=iter(fake_items)):
+        df = collect_jackhhao_jailbreak()
+    assert len(df) == 1
+    assert df.iloc[0]["text"] == "attack text"
+
+
+def test_collect_jackhhao_jailbreak_handles_unavailable():
+    """If dataset is unavailable, should return empty DataFrame gracefully."""
+    with patch("datasets.load_dataset", side_effect=Exception("unavailable")):
+        df = collect_jackhhao_jailbreak()
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == 0
+
+
+# ── collect_spml_injections ───────────────────────────────────────────────────
+
+
+def test_collect_spml_injections_label():
+    fake_items = [
+        {"User Prompt": f"inject {i}", "Prompt injection": 1} for i in range(3)
+    ]
+    with patch("datasets.load_dataset", return_value=iter(fake_items)):
+        df = collect_spml_injections()
     assert (df["label"] == 2).all()
+    assert (df["source_dataset"] == "spml_injections").all()
 
 
-def test_collect_bipia_slices_handles_missing_dataset():
-    """If BIPIA dataset is unavailable, should return empty DataFrame gracefully."""
-    with patch("datasets.load_dataset", side_effect=Exception("Not found")):
-        df = collect_bipia_slices()
+def test_collect_spml_injections_filters_non_injection():
+    """Rows where 'Prompt injection' != 1 must be excluded."""
+    fake_items = [
+        {"User Prompt": "safe message", "Prompt injection": 0},
+        {"User Prompt": "injected msg", "Prompt injection": 1},
+    ]
+    with patch("datasets.load_dataset", return_value=iter(fake_items)):
+        df = collect_spml_injections()
+    assert len(df) == 1
+    assert df.iloc[0]["text"] == "injected msg"
+
+
+def test_collect_spml_injections_handles_unavailable():
+    """If dataset is unavailable, should return empty DataFrame gracefully."""
+    with patch("datasets.load_dataset", side_effect=Exception("unavailable")):
+        df = collect_spml_injections()
     assert isinstance(df, pd.DataFrame)
     assert len(df) == 0
 
@@ -209,7 +258,7 @@ def test_collect_all_sources_returns_all_schema_columns():
         patch("src.data.collect.collect_jailbreakbench", return_value=fake_df),
         patch("src.data.collect.collect_advbench", return_value=fake_df),
         patch("src.data.collect.collect_prompt_injections", return_value=fake_df),
-        patch("src.data.collect.collect_bipia_slices", return_value=fake_df),
+        patch("src.data.collect.collect_spml_injections", return_value=fake_df),
         patch("src.data.collect.collect_safe_corpus", return_value=fake_df),
     ):
         config = {
@@ -246,7 +295,7 @@ def test_collect_all_sources_deduplicates():
             return_value=pd.DataFrame(columns=SCHEMA_COLUMNS),
         ),
         patch(
-            "src.data.collect.collect_bipia_slices",
+            "src.data.collect.collect_spml_injections",
             return_value=pd.DataFrame(columns=SCHEMA_COLUMNS),
         ),
         patch(
