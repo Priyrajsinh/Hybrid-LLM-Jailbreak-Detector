@@ -7,6 +7,7 @@ data:
     - deepset_prompt_injections
     - spml_injections
     - safe_corpus
+    - safe_questions
   train_split: 0.70
   val_split: 0.15
   test_split: 0.15
@@ -25,7 +26,7 @@ model:
     attn_implementation: "sdpa"
   stage_b:
     model_name: "meta-llama/Llama-Guard-3-8B"
-    enabled: true
+    enabled: false  # 16 GB model — requires HF gated access + GPU; disabled for local dev
   perplexity_threshold: 500.0
   similarity:
     model_name: "all-MiniLM-L6-v2"
