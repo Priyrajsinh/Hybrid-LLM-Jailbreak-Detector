@@ -17,6 +17,7 @@ from src.data.collect import (
     collect_jailbreakbench,
     collect_prompt_injections,
     collect_safe_corpus,
+    collect_safe_questions,
     collect_spml_injections,
 )
 
@@ -244,6 +245,47 @@ def test_collect_safe_corpus_fallback_on_c4_failure():
 
     with patch("datasets.load_dataset", side_effect=side_effect):
         df = collect_safe_corpus(max_samples=1)
+    assert isinstance(df, pd.DataFrame)
+
+
+# ── collect_safe_questions ────────────────────────────────────────────────────
+
+
+def test_collect_safe_questions_label():
+    fake_items = [{"question": "What is the capital of France?"} for _ in range(3)]
+    with patch("datasets.load_dataset", return_value=fake_items):
+        df = collect_safe_questions(max_samples=3)
+    assert (df["label"] == 0).all()
+
+
+def test_collect_safe_questions_schema():
+    fake_items = [{"question": "Who wrote Hamlet?"} for _ in range(2)]
+    with patch("datasets.load_dataset", return_value=fake_items):
+        df = collect_safe_questions(max_samples=2)
+    assert list(df.columns) == SCHEMA_COLUMNS
+    assert df["source_dataset"].iloc[0] == "safe_questions"
+
+
+def test_collect_safe_questions_deduplicates():
+    fake_items = [{"question": "Same question?"} for _ in range(5)]
+    with patch("datasets.load_dataset", return_value=fake_items):
+        df = collect_safe_questions(max_samples=10)
+    assert len(df) == 1
+
+
+def test_collect_safe_questions_fallback_on_failure():
+    fallback_items = [{"question": "Fallback question?"}]
+    call_count = 0
+
+    def side_effect(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if "squad" in str(args):
+            raise Exception("squad unavailable")
+        return fallback_items
+
+    with patch("datasets.load_dataset", side_effect=side_effect):
+        df = collect_safe_questions(max_samples=1)
     assert isinstance(df, pd.DataFrame)
 
 

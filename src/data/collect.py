@@ -307,6 +307,50 @@ def collect_safe_corpus(max_samples: int | None = None) -> pd.DataFrame:
     return df
 
 
+def collect_safe_questions(max_samples: int | None = None) -> pd.DataFrame:
+    """
+    Load short conversational questions as safe examples.
+
+    Uses rajpurkar/squad (question field only) with fallback to
+    allenai/nqa. Fixes the OOD gap where C4 prose is long-form but
+    injection prompts are short — model must see short safe questions.
+    Label=0 (safe). Default cap: 3000 rows.
+    """
+    from datasets import load_dataset  # type: ignore[import-untyped]
+
+    cap = max_samples if max_samples is not None else 3000
+    logger.info("Loading safe conversational questions (cap=%d)", cap)
+
+    sources = [
+        ("rajpurkar/squad", "train", "question"),
+        ("allenai/nqa", "train", "question"),
+    ]
+
+    for hf_name, split, field in sources:
+        try:
+            ds = load_dataset(hf_name, split=split, streaming=True)  # nosec B615
+            rows: list[dict[str, Any]] = []
+            seen: set[str] = set()
+            for item in ds:
+                if len(rows) >= cap:
+                    break
+                text = str(item.get(field, "")).strip()
+                if not text or len(text) < 5 or text in seen:
+                    continue
+                seen.add(text)
+                rows.append(
+                    _build_row(text, 0, "safe_questions", "user_only", len(rows))
+                )
+            result = pd.DataFrame(rows if rows else [], columns=SCHEMA_COLUMNS)
+            logger.info("%s safe questions: %d rows loaded", hf_name, len(result))
+            return result
+        except Exception as exc:
+            logger.warning("safe_questions source %s unavailable: %s", hf_name, exc)
+
+    logger.error("All safe_questions sources failed — returning empty DataFrame")
+    return pd.DataFrame(columns=SCHEMA_COLUMNS)
+
+
 def collect_all_sources(config: dict[str, Any]) -> pd.DataFrame:
     """
     Merge all 5 sources into a unified DataFrame with the canonical schema.
@@ -318,6 +362,7 @@ def collect_all_sources(config: dict[str, Any]) -> pd.DataFrame:
       4. deepset/prompt-injections    — label=2 (indirect_injection)
       5. SPML_Chatbot_Prompt_Injection — label=2 (indirect_injection)
       6. c4/OpenWebText               — label=0 (safe)
+      7. rajpurkar/squad (questions)  — label=0 (safe, short conversational)
 
     Config keys: wildjailbreak and bipia_slices are kept for backward
     compatibility and route to jackhhao and spml_injections respectively.
@@ -350,6 +395,8 @@ def collect_all_sources(config: dict[str, Any]) -> pd.DataFrame:
         frames.append(collect_spml_injections(max_per_source))
     if "safe_corpus" in sources:
         frames.append(collect_safe_corpus(max_per_source))
+    if "safe_questions" in sources:
+        frames.append(collect_safe_questions(max_per_source))
 
     if not frames:
         logger.warning("No source frames collected — returning empty DataFrame")
