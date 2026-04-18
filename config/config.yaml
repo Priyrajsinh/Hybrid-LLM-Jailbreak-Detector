@@ -71,6 +71,7 @@ evaluation:
 redteam:
   seed: 42
   n_mutations_per_template: 5
+  output_dir: "reports/redteam"
 
 api:
   rate_limit_classify: "120/minute"
