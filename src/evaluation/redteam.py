@@ -293,6 +293,25 @@ class RedTeamHarness:
                 results.append(template.format(prompt=text))
         return results
 
+    def back_translation_mutation(self, texts: list[str]) -> list[str]:
+        """Round-trip EN->X->EN to produce paraphrased attack variants."""
+        results: list[str] = []
+        for text in texts:
+            for lang, fwd_name, bwd_name in _BACK_TRANSLATION_LANGS:
+                try:
+                    fwd_model, fwd_tok = _load_marian(fwd_name)
+                    translated = _translate(text, fwd_model, fwd_tok)
+                    bwd_model, bwd_tok = _load_marian(bwd_name)
+                    back = _translate(translated, bwd_model, bwd_tok)
+                    for _ in range(self._n_mutations):
+                        results.append(back)
+                except Exception as exc:
+                    self._logger.warning(
+                        "back_translation_skipped",
+                        extra={"lang": lang, "error": str(exc)},
+                    )
+        return results
+
 
 def run_redteam(config: dict[str, Any]) -> None:
     """Placeholder — full implementation added in later commit."""
