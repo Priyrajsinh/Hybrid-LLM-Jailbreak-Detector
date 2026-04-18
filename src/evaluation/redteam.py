@@ -135,6 +135,99 @@ def _translate(text: str, model: Any, tokenizer: Any) -> str:
     return str(tokenizer.decode(ids[0], skip_special_tokens=True))
 
 
+def _run_single_turn(
+    pipeline: _PipelineProtocol,
+    attacks: list[str],
+) -> dict[str, Any]:
+    n_blocked = n_human = n_allowed = 0
+    for text in attacks:
+        try:
+            resp = pipeline.classify(ClassifyRequest(user_prompt=text))
+            if resp.decision == "block":
+                n_blocked += 1
+            elif resp.decision == "human_review":
+                n_human += 1
+            else:
+                n_allowed += 1
+        except Exception:
+            n_blocked += 1
+    n_total = len(attacks)
+    block_rate = (n_blocked + n_human) / max(n_total, 1)
+    return {
+        "n_attacks": n_total,
+        "n_blocked": n_blocked,
+        "n_human_review": n_human,
+        "n_allowed": n_allowed,
+        "block_rate": block_rate,
+    }
+
+
+def _run_requests(
+    pipeline: _PipelineProtocol,
+    requests: list[ClassifyRequest],
+) -> dict[str, Any]:
+    n_blocked = n_human = n_allowed = 0
+    for req in requests:
+        try:
+            resp = pipeline.classify(req)
+            if resp.decision == "block":
+                n_blocked += 1
+            elif resp.decision == "human_review":
+                n_human += 1
+            else:
+                n_allowed += 1
+        except Exception:
+            n_blocked += 1
+    n_total = len(requests)
+    block_rate = (n_blocked + n_human) / max(n_total, 1)
+    return {
+        "n_attacks": n_total,
+        "n_blocked": n_blocked,
+        "n_human_review": n_human,
+        "n_allowed": n_allowed,
+        "block_rate": block_rate,
+    }
+
+
+def _run_multi_turn(
+    pipeline: _PipelineProtocol,
+    requests: list[ClassifyRequest],
+    op_name: str,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    n_blocked = n_human = n_allowed = 0
+    critical: list[dict[str, Any]] = []
+    for req in requests:
+        try:
+            resp = pipeline.classify(req)
+            if resp.decision == "block":
+                n_blocked += 1
+            elif resp.decision == "human_review":
+                n_human += 1
+            else:
+                n_allowed += 1
+                critical.append(
+                    {
+                        "severity": "critical",
+                        "operator": op_name,
+                        "prompt": req.user_prompt,
+                        "conversation_history": req.conversation_history,
+                        "decision": resp.decision,
+                    }
+                )
+        except Exception:
+            n_blocked += 1
+    n_total = len(requests)
+    block_rate = (n_blocked + n_human) / max(n_total, 1)
+    stats: dict[str, Any] = {
+        "n_attacks": n_total,
+        "n_blocked": n_blocked,
+        "n_human_review": n_human,
+        "n_allowed": n_allowed,
+        "block_rate": block_rate,
+    }
+    return stats, critical
+
+
 def run_redteam(config: dict[str, Any]) -> None:
     """Placeholder — full implementation added in later commit."""
     pass
