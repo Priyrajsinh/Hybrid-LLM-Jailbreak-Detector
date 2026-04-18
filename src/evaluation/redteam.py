@@ -277,6 +277,22 @@ class RedTeamHarness:
             )
         return requests
 
+    def typoglycemia_obfuscation(self, texts: list[str]) -> list[str]:
+        """Probabilistic leetspeak + Unicode lookalike substitution."""
+        results: list[str] = []
+        for text in texts:
+            results.append(_apply_leet(text, self._rng))
+            results.append(_apply_homoglyphs(text))
+        return results
+
+    def multilingual_rewrite(self, texts: list[str]) -> list[str]:
+        """Wrap attack prompts in multilingual jailbreak templates."""
+        results: list[str] = []
+        for text in texts:
+            for template in _MULTILINGUAL_TEMPLATES.values():
+                results.append(template.format(prompt=text))
+        return results
+
 
 def run_redteam(config: dict[str, Any]) -> None:
     """Placeholder — full implementation added in later commit."""
