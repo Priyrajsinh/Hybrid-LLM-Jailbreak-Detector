@@ -1,6 +1,7 @@
 """Red-team harness with 6 mutation operators + multi-turn ASR reporting."""
 
 import argparse
+import random
 from typing import Any, Protocol
 
 from src.api.schemas import ClassifyRequest, ClassifyResponse
@@ -90,6 +91,48 @@ _CRESCENDO_TURNS: list[str] = [
 
 # Module-level cache for lazily-loaded MarianMT models (populated on demand).
 _MARIAN_CACHE: dict[str, tuple[Any, Any]] = {}
+
+
+# ---------------------------------------------------------------------------
+# Low-level mutation helpers
+# ---------------------------------------------------------------------------
+
+
+def _apply_leet(text: str, rng: random.Random) -> str:
+    """Probabilistic leetspeak substitution (seeded for reproducibility)."""
+    return "".join(
+        _LEET_MAP[c.lower()] if c.lower() in _LEET_MAP and rng.random() < 0.6 else c
+        for c in text
+    )
+
+
+def _apply_homoglyphs(text: str) -> str:
+    """Replace ASCII chars with Unicode lookalikes."""
+    return "".join(_UNICODE_LOOKALIKES.get(c.lower(), c) for c in text)
+
+
+def _load_marian(model_name: str) -> tuple[Any, Any]:
+    """Lazy-load a MarianMT model+tokenizer pair; cached after first download."""
+    if model_name not in _MARIAN_CACHE:
+        from transformers import (  # type: ignore[attr-defined]
+            MarianMTModel,
+            MarianTokenizer,
+        )
+
+        tokenizer = MarianTokenizer.from_pretrained(model_name)  # nosec B615
+        model = MarianMTModel.from_pretrained(model_name)  # nosec B615
+        _MARIAN_CACHE[model_name] = (model, tokenizer)
+    return _MARIAN_CACHE[model_name]
+
+
+def _translate(text: str, model: Any, tokenizer: Any) -> str:
+    """Translate one string with a MarianMT model."""
+    import torch  # type: ignore[import]
+
+    inputs = tokenizer([text], return_tensors="pt", truncation=True, max_length=512)
+    with torch.no_grad():
+        ids = model.generate(**inputs)
+    return str(tokenizer.decode(ids[0], skip_special_tokens=True))
 
 
 def run_redteam(config: dict[str, Any]) -> None:
