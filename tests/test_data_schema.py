@@ -172,10 +172,14 @@ def test_hybrid_stubs_importable():
 
 
 def test_api_app_health_endpoint():
-    from src.api.app import health
+    from fastapi.testclient import TestClient
 
-    result = health()
-    assert result == {"status": "ok"}
+    import src.api.app as app_module
+
+    client = TestClient(app_module.app)
+    resp = client.get("/api/v1/health")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
 
 
 def test_ui_theme_get_css():
@@ -192,10 +196,10 @@ def test_ui_theme_get_theme():
     assert result is None
 
 
-def test_feedback_store_instantiable():
+def test_feedback_store_instantiable(tmp_path):
     from src.api.feedback import FeedbackStore
 
-    store = FeedbackStore()
+    store = FeedbackStore(str(tmp_path / "test.db"))
     assert store is not None
 
 

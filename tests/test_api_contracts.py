@@ -1,14 +1,8 @@
 """API contract tests — all endpoints, SSE stream, feedback, rate-limit stats."""
 
-import json
-import os
-import tempfile
 from typing import Any
-from unittest.mock import MagicMock, patch
 
-import httpx
 import pytest
-from httpx import ASGITransport
 
 # ---------------------------------------------------------------------------
 # Fake pipeline + config
@@ -41,7 +35,10 @@ def _make_response(label: str, decision: str) -> dict[str, Any]:
 
 class FakePipeline:
     def classify(self, request: Any, explain: bool = False) -> Any:
-        if "jailbreak" in request.user_prompt.lower() or "ignore" in request.user_prompt.lower():
+        if (
+            "jailbreak" in request.user_prompt.lower()
+            or "ignore" in request.user_prompt.lower()
+        ):
             return _make_response("jailbreak", "block")
         return _make_response("safe", "allow")
 
@@ -176,7 +173,12 @@ def test_classify_returns_stage_used(app_client: Any) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert "stage_used" in data
-    assert data["stage_used"] in ("stage_a_only", "stage_a_plus_stage_b", "perplexity_gate", "similarity_gate")
+    assert data["stage_used"] in (
+        "stage_a_only",
+        "stage_a_plus_stage_b",
+        "perplexity_gate",
+        "similarity_gate",
+    )
 
 
 def test_classify_returns_new_fields(app_client: Any) -> None:
@@ -258,7 +260,14 @@ def test_sse_stream_stages_in_order(app_client: Any) -> None:
     content = resp.text
 
     # All required events must appear
-    required_events = ["normalization", "perplexity", "similarity", "stage_a", "stage_b", "decision"]
+    required_events = [
+        "normalization",
+        "perplexity",
+        "similarity",
+        "stage_a",
+        "stage_b",
+        "decision",
+    ]
     positions = []
     for event in required_events:
         pos = content.find(f"event: {event}")
