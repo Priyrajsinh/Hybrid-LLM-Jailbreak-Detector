@@ -6,7 +6,7 @@ import time
 from typing import Any, AsyncGenerator, Optional
 
 import psutil
-from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi import FastAPI, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
@@ -86,10 +86,13 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(
     title="P1 Hybrid Jailbreak Detector",
     version="0.1.0",
-    description="Production-hardened hybrid LLM jailbreak and prompt injection detector.",
+    description="Hybrid LLM jailbreak and prompt injection detector.",
 )
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+app.add_exception_handler(
+    RateLimitExceeded,
+    _rate_limit_exceeded_handler,  # type: ignore[arg-type]
+)
 
 # Prometheus instrumentation
 Instrumentator().instrument(app).expose(app)
@@ -113,7 +116,7 @@ async def content_length_guard(request: Request, call_next: Any) -> Response:
             status_code=413,
             content={"detail": f"Payload exceeds {_max_payload_mb}MB limit"},
         )
-    return await call_next(request)  # type: ignore[return-value]
+    return await call_next(request)  # type: ignore[return-value,no-any-return]
 
 
 @app.middleware("http")
@@ -156,7 +159,9 @@ async def health() -> HealthResponse:
     proc = psutil.Process(os.getpid())
     mem_mb = proc.memory_info().rss / (1024 * 1024)
     pipeline_ready = _pipeline is not None
-    model_loaded = pipeline_ready and _pipeline._stage_a._model is not None  # type: ignore[union-attr]
+    model_loaded = pipeline_ready and (
+        _pipeline._stage_a._model is not None  # type: ignore[union-attr]
+    )
     return HealthResponse(
         status="ok",
         model_loaded=model_loaded,
@@ -237,9 +242,7 @@ async def classify_stream(
             "event": "similarity",
             "data": json.dumps(
                 {
-                    "score": round(
-                        float(sim_result.get("similarity_score") or 0.0), 3
-                    ),
+                    "score": round(float(sim_result.get("similarity_score") or 0.0), 3),
                     "blocked": sim_result.get("blocked", False),
                 }
             ),
@@ -259,7 +262,9 @@ async def classify_stream(
             external_context=external_context,
         )
         if classify_req.conversation_history:
-            full_text = "\n".join(list(classify_req.conversation_history) + [normalized])
+            full_text = "\n".join(
+                list(classify_req.conversation_history) + [normalized]
+            )
         else:
             full_text = normalized
 
@@ -269,7 +274,9 @@ async def classify_stream(
             "data": json.dumps(
                 {
                     "label": str(stage_a_result.get("label")),
-                    "confidence": round(float(stage_a_result.get("confidence", 0.0)), 4),
+                    "confidence": round(
+                        float(stage_a_result.get("confidence", 0.0)), 4
+                    ),
                 }
             ),
         }

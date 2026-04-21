@@ -1,4 +1,7 @@
-"""SQLite-backed feedback correction store (C39 — db_path from config, never hardcoded)."""
+"""SQLite-backed feedback correction store.
+
+C39: db_path from config, never hardcoded.
+"""
 
 import sqlite3
 import threading
@@ -22,8 +25,7 @@ class FeedbackStore:
 
     def _init_db(self) -> None:
         with sqlite3.connect(self._db_path) as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS corrections (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp TEXT NOT NULL,
@@ -34,8 +36,7 @@ class FeedbackStore:
                     original_confidence REAL NOT NULL,
                     feedback_type TEXT NOT NULL
                 )
-                """
-            )
+                """)
             conn.commit()
 
     def submit_correction(self, request: FeedbackRequest) -> dict[str, Any]:
@@ -71,16 +72,15 @@ class FeedbackStore:
 
     def get_stats(self) -> dict[str, Any]:
         with sqlite3.connect(self._db_path) as conn:
-            total: int = conn.execute(
-                "SELECT COUNT(*) FROM corrections"
-            ).fetchone()[0]
+            total: int = conn.execute("SELECT COUNT(*) FROM corrections").fetchone()[0]
 
             by_type_rows = conn.execute(
                 "SELECT feedback_type, COUNT(*) FROM corrections GROUP BY feedback_type"
             ).fetchall()
 
             by_label_rows = conn.execute(
-                "SELECT original_label, COUNT(*) FROM corrections GROUP BY original_label"
+                "SELECT original_label, COUNT(*) FROM corrections"
+                " GROUP BY original_label"
             ).fetchall()
 
         by_type: dict[str, int] = {row[0]: row[1] for row in by_type_rows}

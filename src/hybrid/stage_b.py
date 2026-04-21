@@ -91,7 +91,9 @@ class StageBJudge:
             model="meta-llama/Llama-Guard-3-8B",
             messages=[{"role": "user", "content": prompt}],
         )
-        raw: str = response.choices[0].message.content.strip().lower()
+        choice_msg = response.choices[0].message
+        msg_content = (choice_msg.content if choice_msg is not None else "") or ""
+        raw: str = str(msg_content).strip().lower()
         verdict = self._parse_response(raw)
         self._logger.info(
             "stage_b_judged_api",

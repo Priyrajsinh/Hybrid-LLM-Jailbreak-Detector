@@ -39,6 +39,14 @@ module = [
     "pandas.*",
     "matplotlib",
     "matplotlib.*",
+    "slowapi",
+    "slowapi.*",
+    "sse_starlette",
+    "sse_starlette.*",
+    "prometheus_fastapi_instrumentator",
+    "prometheus_fastapi_instrumentator.*",
+    "together",
+    "together.*",
 ]
 ignore_missing_imports = true
 
