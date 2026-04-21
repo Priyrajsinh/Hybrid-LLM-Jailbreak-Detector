@@ -47,7 +47,9 @@ class BatchClassifyRequest(BaseModel):
 
     @field_validator("requests")
     @classmethod
-    def requests_must_not_be_empty(cls, v: list[ClassifyRequest]) -> list[ClassifyRequest]:
+    def requests_must_not_be_empty(
+        cls, v: list[ClassifyRequest]
+    ) -> list[ClassifyRequest]:
         if not v:
             raise ValueError("requests must not be empty")
         return v
