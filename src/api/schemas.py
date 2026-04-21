@@ -2,6 +2,11 @@ from typing import Optional
 
 from pydantic import BaseModel, field_validator
 
+_VALID_SOURCE_TYPES = {"user_input", "external_doc", "api_call", "system_prompt"}
+_VALID_FEEDBACK_TYPES = {"false_positive", "false_negative", "label_correction"}
+_VALID_DECISIONS = {"allow", "block", "human_review"}
+_VALID_LABELS = {"safe", "jailbreak", "indirect_injection"}
+
 
 class ClassifyRequest(BaseModel):
     user_prompt: str
@@ -19,9 +24,8 @@ class ClassifyRequest(BaseModel):
     @field_validator("source_type")
     @classmethod
     def source_type_must_be_valid(cls, v: str) -> str:
-        allowed = {"user_input", "external_doc", "api_call", "system_prompt"}
-        if v not in allowed:
-            raise ValueError(f"source_type must be one of {allowed}")
+        if v not in _VALID_SOURCE_TYPES:
+            raise ValueError(f"source_type must be one of {_VALID_SOURCE_TYPES}")
         return v
 
 
@@ -36,3 +40,63 @@ class ClassifyResponse(BaseModel):
     similarity_score: Optional[float] = None
     perplexity_score: Optional[float] = None
     token_attributions: Optional[list[dict[str, str | float]]] = None
+
+
+class BatchClassifyRequest(BaseModel):
+    requests: list[ClassifyRequest]
+
+    @field_validator("requests")
+    @classmethod
+    def requests_must_not_be_empty(cls, v: list[ClassifyRequest]) -> list[ClassifyRequest]:
+        if not v:
+            raise ValueError("requests must not be empty")
+        return v
+
+
+class BatchClassifyResponse(BaseModel):
+    responses: list[ClassifyResponse]
+
+
+class HealthResponse(BaseModel):
+    status: str
+    model_loaded: bool
+    pipeline_ready: bool
+    uptime_seconds: float
+    memory_mb: float
+
+
+class FeedbackRequest(BaseModel):
+    user_prompt: str
+    original_label: str
+    corrected_label: str
+    original_decision: str
+    original_confidence: float
+    feedback_type: str
+
+    @field_validator("original_label", "corrected_label")
+    @classmethod
+    def label_must_be_valid(cls, v: str) -> str:
+        if v not in _VALID_LABELS:
+            raise ValueError(f"label must be one of {_VALID_LABELS}")
+        return v
+
+    @field_validator("original_decision")
+    @classmethod
+    def decision_must_be_valid(cls, v: str) -> str:
+        if v not in _VALID_DECISIONS:
+            raise ValueError(f"decision must be one of {_VALID_DECISIONS}")
+        return v
+
+    @field_validator("feedback_type")
+    @classmethod
+    def feedback_type_must_be_valid(cls, v: str) -> str:
+        if v not in _VALID_FEEDBACK_TYPES:
+            raise ValueError(f"feedback_type must be one of {_VALID_FEEDBACK_TYPES}")
+        return v
+
+    @field_validator("original_confidence")
+    @classmethod
+    def confidence_in_range(cls, v: float) -> float:
+        if not (0.0 <= v <= 1.0):
+            raise ValueError("original_confidence must be between 0 and 1")
+        return v
