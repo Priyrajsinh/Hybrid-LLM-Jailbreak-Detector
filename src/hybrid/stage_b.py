@@ -1,6 +1,7 @@
 """Stage B: Llama Guard 3 escalation judge (runs only when escalation triggers)."""
 
 import os
+import time
 from typing import Any, Optional
 
 from src.logger import get_logger
@@ -26,6 +27,14 @@ LLAMA_GUARD_CATEGORIES: tuple[str, ...] = (
     "S17_unsafe_tool_use",
     "S18_jailbreak",
 )
+
+_SAFE_STUB: dict[str, Any] = {
+    "is_safe": True,
+    "violation_categories": [],
+    "risk_score": 0.0,
+}
+
+_RETRY_DELAYS: tuple[float, ...] = (1.0, 2.0, 4.0)
 
 
 class StageBJudge:
@@ -65,14 +74,8 @@ class StageBJudge:
 
         Only called by HybridPipeline when PolicyGate.should_escalate() is True.
         """
-        safe_stub = {
-            "is_safe": True,
-            "violation_categories": [],
-            "risk_score": 0.0,
-        }
-
         if not self._enabled:
-            return safe_stub
+            return dict(_SAFE_STUB)
 
         prompt = self._build_prompt(text)
 
@@ -84,26 +87,48 @@ class StageBJudge:
     def _judge_via_api(
         self, prompt: str, stage_a_result: dict[str, Any]
     ) -> dict[str, Any]:
+        """Call Together AI with exponential backoff; fall back to safe_stub."""
         import together  # type: ignore[import]
 
         client = together.Together(api_key=self._api_key)
-        response = client.chat.completions.create(
-            model="meta-llama/Llama-Guard-3-8B",
-            messages=[{"role": "user", "content": prompt}],
+        last_exc: Exception = RuntimeError("no attempts made")
+
+        for attempt, delay in enumerate(_RETRY_DELAYS, start=1):
+            try:
+                response = client.chat.completions.create(
+                    model="meta-llama/Llama-Guard-3-8B",
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                choice_msg = response.choices[0].message
+                msg_content = (
+                    choice_msg.content if choice_msg is not None else ""
+                ) or ""
+                raw: str = str(msg_content).strip().lower()
+                verdict = self._parse_response(raw)
+                self._logger.info(
+                    "stage_b_judged_api",
+                    extra={
+                        "is_safe": verdict["is_safe"],
+                        "n_categories": len(verdict["violation_categories"]),
+                        "stage_a_label": stage_a_result.get("label"),
+                        "attempt": attempt,
+                    },
+                )
+                return verdict
+            except Exception as exc:
+                last_exc = exc
+                self._logger.warning(
+                    "stage_b_api_retry",
+                    extra={"attempt": attempt, "error": str(exc), "delay": delay},
+                )
+                if attempt < len(_RETRY_DELAYS):
+                    time.sleep(delay)
+
+        self._logger.error(
+            "stage_b_api_failed",
+            extra={"error": str(last_exc), "fallback": "safe_stub"},
         )
-        choice_msg = response.choices[0].message
-        msg_content = (choice_msg.content if choice_msg is not None else "") or ""
-        raw: str = str(msg_content).strip().lower()
-        verdict = self._parse_response(raw)
-        self._logger.info(
-            "stage_b_judged_api",
-            extra={
-                "is_safe": verdict["is_safe"],
-                "n_categories": len(verdict["violation_categories"]),
-                "stage_a_label": stage_a_result.get("label"),
-            },
-        )
-        return verdict
+        return dict(_SAFE_STUB)
 
     def _judge_local(
         self, text: str, prompt: str, stage_a_result: dict[str, Any]
