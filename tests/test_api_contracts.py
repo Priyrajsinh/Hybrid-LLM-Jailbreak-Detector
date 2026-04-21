@@ -139,6 +139,25 @@ def test_health_returns_200(app_client: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Request ID header
+# ---------------------------------------------------------------------------
+
+
+def test_response_has_x_request_id_header(app_client: Any) -> None:
+    resp = app_client.get("/api/v1/health")
+    assert "x-request-id" in resp.headers
+    # Must be a valid UUID4
+    import uuid
+
+    uuid.UUID(resp.headers["x-request-id"], version=4)
+
+
+def test_x_request_id_is_unique_per_request(app_client: Any) -> None:
+    ids = {app_client.get("/api/v1/health").headers["x-request-id"] for _ in range(3)}
+    assert len(ids) == 3
+
+
+# ---------------------------------------------------------------------------
 # Classify
 # ---------------------------------------------------------------------------
 
