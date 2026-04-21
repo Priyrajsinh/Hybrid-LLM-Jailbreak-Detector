@@ -27,6 +27,7 @@ model:
   stage_b:
     model_name: "meta-llama/Llama-Guard-3-8B"
     enabled: false  # 16 GB model — requires HF gated access + GPU; disabled for local dev
+    use_api: false  # set true to use Together AI instead of local model (HF Space mode)
   perplexity_threshold: 500.0
   similarity:
     model_name: "all-MiniLM-L6-v2"

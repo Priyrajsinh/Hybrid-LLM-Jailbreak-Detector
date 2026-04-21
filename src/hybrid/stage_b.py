@@ -1,5 +1,6 @@
 """Stage B: Llama Guard 3 escalation judge (runs only when escalation triggers)."""
 
+import os
 from typing import Any, Optional
 
 from src.logger import get_logger
@@ -39,6 +40,8 @@ class StageBJudge:
         stage_cfg: dict[str, Any] = config["model"]["stage_b"]
         self._model_name: str = str(stage_cfg["model_name"])
         self._enabled: bool = bool(stage_cfg.get("enabled", True))
+        self._use_api: bool = bool(stage_cfg.get("use_api", False))
+        self._api_key: str = os.environ.get("TOGETHER_API_KEY", "")
         self._model = model
         self._tokenizer = tokenizer
         self._logger = get_logger(__name__)
@@ -62,18 +65,51 @@ class StageBJudge:
 
         Only called by HybridPipeline when PolicyGate.should_escalate() is True.
         """
-        if not self._enabled:
-            return {
-                "is_safe": True,
-                "violation_categories": [],
-                "risk_score": 0.0,
-            }
+        safe_stub = {
+            "is_safe": True,
+            "violation_categories": [],
+            "risk_score": 0.0,
+        }
 
+        if not self._enabled:
+            return safe_stub
+
+        prompt = self._build_prompt(text)
+
+        if self._use_api:
+            return self._judge_via_api(prompt, stage_a_result)
+
+        return self._judge_local(text, prompt, stage_a_result)
+
+    def _judge_via_api(
+        self, prompt: str, stage_a_result: dict[str, Any]
+    ) -> dict[str, Any]:
+        import together  # type: ignore[import]
+
+        client = together.Together(api_key=self._api_key)
+        response = client.chat.completions.create(
+            model="meta-llama/Llama-Guard-3-8B",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw: str = response.choices[0].message.content.strip().lower()
+        verdict = self._parse_response(raw)
+        self._logger.info(
+            "stage_b_judged_api",
+            extra={
+                "is_safe": verdict["is_safe"],
+                "n_categories": len(verdict["violation_categories"]),
+                "stage_a_label": stage_a_result.get("label"),
+            },
+        )
+        return verdict
+
+    def _judge_local(
+        self, text: str, prompt: str, stage_a_result: dict[str, Any]
+    ) -> dict[str, Any]:
         self._ensure_loaded()
         assert self._tokenizer is not None
         assert self._model is not None
 
-        prompt = self._build_prompt(text)
         import torch
 
         encoded = self._tokenizer(prompt, return_tensors="pt")
