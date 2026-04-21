@@ -3,6 +3,7 @@
 import json
 import os
 import time
+import uuid
 from typing import Any, AsyncGenerator, Optional
 
 import psutil
@@ -128,11 +129,17 @@ async def request_logger(request: Request, call_next: Any) -> Response:
         _window_start = time.monotonic()
         _window_requests = 1
 
+    request_id = str(uuid.uuid4())
     _logger.info(
         "http_request",
-        extra={"method": request.method, "path": request.url.path},
+        extra={
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+        },
     )
     response: Response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
     return response
 
 
