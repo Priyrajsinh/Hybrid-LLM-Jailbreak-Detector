@@ -83,4 +83,5 @@ omit = [
     "src/baseline/*",
     "src/ui/gradio_app.py",
     "src/api/stream.py",
+    "hf_space/*",
 ]
