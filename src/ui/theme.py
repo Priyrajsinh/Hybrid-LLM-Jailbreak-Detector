@@ -1,4 +1,5 @@
 """Dark glassmorphism theme and CSS for the Gradio UI."""
+
 import gradio as gr
 
 
@@ -84,7 +85,9 @@ textarea:focus, input:focus {
     ) !important;
     background-size: 1000px 100% !important;
     border: 1px solid rgba(99, 102, 241, 0.6) !important;
-    animation: shimmer 2s infinite linear, borderGlow 2s infinite ease-in-out !important;
+    animation:
+        shimmer 2s infinite linear,
+        borderGlow 2s infinite ease-in-out !important;
 }
 
 /* Result reveal animation */

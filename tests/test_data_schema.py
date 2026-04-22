@@ -190,10 +190,12 @@ def test_ui_theme_get_css():
 
 
 def test_ui_theme_get_theme():
+    import gradio as gr
+
     from src.ui.theme import get_theme
 
     result = get_theme()
-    assert result is None
+    assert isinstance(result, gr.themes.Base)
 
 
 def test_feedback_store_instantiable(tmp_path):
