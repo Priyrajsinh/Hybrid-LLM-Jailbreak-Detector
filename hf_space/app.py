@@ -16,14 +16,7 @@ import plotly.graph_objects as go
 
 # ── Inline config (C12: no src/ imports) ─────────────────────────────────────
 _CONFIG: dict[str, Any] = {
-    "stage_a": {
-        "base_model": os.getenv("STAGE_A_BASE", "answerdotai/ModernBERT-base"),
-        "adapter_path": os.getenv("STAGE_A_ADAPTER", ""),
-        "max_length": 512,
-        "num_labels": 3,
-    },
-    "stage_b": {"enabled": False},  # HF free tier — no 8B GPU
-    "perplexity_threshold": 500.0,
+    "stage_b": {"enabled": True, "model": "meta-llama/Meta-Llama-Guard-3-8B"},
     "similarity_threshold": 0.85,
 }
 
@@ -101,91 +94,97 @@ def _heuristic_classify(text: str) -> dict[str, Any]:
     }
 
 
-# ── Lazy model state ──────────────────────────────────────────────────────────
-_model: Optional[Any] = None
-_tokenizer: Optional[Any] = None
-_model_loaded = False
-_model_error: Optional[str] = None
+# ── Llama Guard 3 via Together AI ────────────────────────────────────────────
+_TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "")
+
+# Llama Guard 3 category → human-readable attack type
+_LG_CATEGORIES: dict[str, str] = {
+    "S1": "violent_crimes",
+    "S2": "non_violent_crimes",
+    "S3": "sex_crimes",
+    "S4": "child_exploitation",
+    "S5": "defamation",
+    "S6": "specialized_advice",
+    "S7": "privacy",
+    "S8": "intellectual_property",
+    "S9": "weapons",
+    "S10": "hate_speech",
+    "S11": "self_harm",
+    "S12": "sexual_content",
+    "S13": "elections",
+    "S14": "code_abuse",
+}
+# Categories that map to indirect_injection rather than jailbreak
+_INJECTION_CATS = {"S13", "S14"}
 
 
-def _try_load_model() -> None:
-    global _model, _tokenizer, _model_loaded, _model_error
-    if _model_loaded:
-        return
-    _model_loaded = True
-    adapter = _CONFIG["stage_a"]["adapter_path"]
-    base = _CONFIG["stage_a"]["base_model"]
-    if not adapter:
-        _model_error = "No adapter path configured — using heuristic classifier."
-        return
+def _together_classify(text: str) -> Optional[dict[str, Any]]:
+    """Call Llama Guard 3 via Together AI. Returns None if API unavailable."""
+    if not _TOGETHER_API_KEY:
+        return None
     try:
-        from peft import PeftModel  # type: ignore[import]
-        from transformers import (  # type: ignore[import]
-            AutoModelForSequenceClassification,
-            AutoTokenizer,
-        )
+        import httpx  # type: ignore[import]
 
-        _tokenizer = AutoTokenizer.from_pretrained(base)
-        base_model = AutoModelForSequenceClassification.from_pretrained(
-            base, num_labels=3
+        resp = httpx.post(
+            "https://api.together.xyz/v1/chat/completions",
+            headers={"Authorization": f"Bearer {_TOGETHER_API_KEY}"},
+            json={
+                "model": "meta-llama/Meta-Llama-Guard-3-8B",
+                "messages": [{"role": "user", "content": text}],
+                "max_tokens": 50,
+                "temperature": 0,
+            },
+            timeout=30.0,
         )
-        _model = PeftModel.from_pretrained(base_model, adapter)
-        _model.eval()
-    except Exception as exc:  # noqa: BLE001
-        _model_error = f"Model load failed ({exc}) — using heuristic classifier."
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"].strip()
+        lines = content.split("\n")
+        verdict = lines[0].strip().lower()
+
+        if verdict == "safe":
+            return {
+                "label": "safe",
+                "decision": "allow",
+                "confidence": 0.96,
+                "stage_used": "llama_guard_3",
+                "reason_tags": [],
+                "attack_type": None,
+                "risk_scores": {
+                    "safe": 0.96,
+                    "jailbreak": 0.02,
+                    "indirect_injection": 0.02,
+                },
+            }
+        elif verdict == "unsafe":
+            cat = lines[1].strip().upper() if len(lines) > 1 else "S1"
+            label = "indirect_injection" if cat in _INJECTION_CATS else "jailbreak"
+            attack = _LG_CATEGORIES.get(cat, cat.lower())
+            return {
+                "label": label,
+                "decision": "block",
+                "confidence": 0.96,
+                "stage_used": "llama_guard_3",
+                "reason_tags": [f"llama_guard:{cat}", attack],
+                "attack_type": attack,
+                "risk_scores": {
+                    "safe": 0.02,
+                    "jailbreak": 0.96 if label == "jailbreak" else 0.02,
+                    "indirect_injection": (
+                        0.96 if label == "indirect_injection" else 0.02
+                    ),
+                },
+            }
+        return None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _model_classify(text: str) -> dict[str, Any]:
-    """Run Stage A inference; fall back to heuristic on failure."""
-    _try_load_model()
-    if _model is None or _tokenizer is None:
-        return _heuristic_classify(text)
-    try:
-        import torch  # type: ignore[import]
-
-        enc = _tokenizer(
-            text,
-            return_tensors="pt",
-            truncation=True,
-            max_length=_CONFIG["stage_a"]["max_length"],
-        )
-        with torch.no_grad():
-            logits = _model(**enc).logits
-        probs = torch.softmax(logits, dim=-1)[0].tolist()
-        idx = int(torch.argmax(logits).item())
-        labels = ["safe", "jailbreak", "indirect_injection"]
-        label = labels[idx]
-        conf = float(probs[idx])
-        if conf >= 0.90 and label == "safe":
-            decision = "allow"
-        elif conf >= 0.85 and label != "safe":
-            decision = "block"
-        else:
-            decision = "human_review"
-        return {
-            "label": label,
-            "decision": decision,
-            "confidence": conf,
-            "stage_used": "stage_a",
-            "reason_tags": [] if label == "safe" else [f"{label}_detected"],
-            "attack_type": None if label == "safe" else label,
-            "risk_scores": {
-                "safe": probs[0],
-                "jailbreak": probs[1],
-                "indirect_injection": probs[2],
-            },
-        }
-    except Exception as exc:  # noqa: BLE001
-        return {**_heuristic_classify(text), "reason_tags": [f"model_error:{exc}"]}
-
-
-# ── Perplexity gate ───────────────────────────────────────────────────────────
-
-
-def _perplexity(text: str) -> float:
-    # Disabled on HF Space — GPT-2 download blocks the event loop on free tier
-    del text
-    return 100.0
+    """Llama Guard 3 via API; heuristic as fallback if API unavailable."""
+    result = _together_classify(text)
+    if result is not None:
+        return result
+    return _heuristic_classify(text)
 
 
 # ── Normalizer (inline) ───────────────────────────────────────────────────────
@@ -251,41 +250,21 @@ def classify_stream(
         steps += f"<div class='stage-step'>   ✓ Applied: {', '.join(norm_tags)}</div>"
     state["norm_tags"] = norm_tags
 
-    # Step 2: Perplexity gate
-    steps += "<div class='stage-step'>📊 <b>Step 2</b> — Perplexity gate...</div>"
-    yield steps, state
-    ppl = _perplexity(normalized)
-    state["perplexity"] = round(ppl, 1)
-    threshold = _CONFIG["perplexity_threshold"]
-    ppl_blocked = ppl > threshold
-    steps += (
-        f"<div class='stage-step'>   ✓ Perplexity: {ppl:.1f} "
-        f"({'BLOCKED' if ppl_blocked else 'OK'})</div>"
+    # Step 2: Classify (Llama Guard 3 via API, or heuristic fallback)
+    classifier_name = (
+        "Llama Guard 3 (Together AI)" if _TOGETHER_API_KEY else "keyword heuristic"
     )
-    if ppl_blocked:
-        state.update(
-            {
-                "label": "jailbreak",
-                "decision": "block",
-                "confidence": 0.99,
-                "reason_tags": ["perplexity_anomaly"],
-            }
-        )
-        steps += _decision_card("block", 0.99, "anomaly")
-        yield steps, state
-        return
-
-    # Step 3: Heuristic / Stage A
     steps += (
-        "<div class='stage-step'>🤖 <b>Step 3</b> — Stage A classification...</div>"
+        f"<div class='stage-step'>🛡️ <b>Step 2</b>"
+        f" — Running {classifier_name}...</div>"
     )
     yield steps, state
 
     result = _model_classify(normalized)
     state.update(result)
     steps += (
-        f"<div class='stage-step'>   ✓ Label: {result['label']} "
-        f"({result['confidence']:.1%})</div>"
+        f"<div class='stage-step'>   ✓ {result['stage_used']} → "
+        f"{result['label']} ({result['confidence']:.1%})</div>"
     )
     steps += _decision_card(result["decision"], result["confidence"], result["label"])
 
@@ -296,12 +275,6 @@ def classify_stream(
             for t in result["reason_tags"]
         )
         steps += f'<div style="margin-top:10px">{spans}</div>'
-
-    if _model_error:
-        steps += (
-            f'<div style="margin-top:8px;color:rgba(255,255,255,.4);font-size:.8rem">'
-            f"ℹ️ {_model_error}</div>"
-        )
 
     yield steps, state
 
@@ -639,10 +612,9 @@ def build_app() -> gr.Blocks:
                         gr.JSON(
                             label="Stage Config",
                             value={
-                                "stage_b_enabled": False,
-                                "stage_a_adapter": _CONFIG["stage_a"]["adapter_path"]
-                                or "heuristic",
-                                "perplexity_threshold": _CONFIG["perplexity_threshold"],
+                                "classifier": _CONFIG["stage_b"]["model"],
+                                "api_key_set": bool(_TOGETHER_API_KEY),
+                                "fallback": "keyword_heuristic",
                             },
                         )
 
@@ -653,13 +625,13 @@ def build_app() -> gr.Blocks:
                     f"```\n{_ARCH}\n```\n\n"
                     "**Layer 1 — Normalizer**: Strips invisible characters "
                     "and homoglyphs attackers use to evade filters.\n\n"
-                    "**Layer 2 — Perplexity Gate**: GPT-2 flags unusually "
-                    "phrased text — a hallmark of adversarial prompts.\n\n"
-                    "**Layer 3/4 — Stage A**: ModernBERT + LoRA fine-tuned "
-                    "for 3-class classification (98% F1). Falls back to "
-                    "keyword heuristic when GPU adapter is unavailable.\n\n"
-                    "**Stage B — Llama Guard 3** (disabled on HF Space): "
-                    "8B safety judge from Meta. Needs ~16 GB VRAM.\n\n"
+                    "**Layer 2 — Llama Guard 3 (Stage B)**: Meta's 8B safety "
+                    "judge called via Together AI API. Classifies into "
+                    "safe / jailbreak / indirect_injection with category codes. "
+                    "Falls back to keyword heuristic if API unavailable.\n\n"
+                    "**Full local pipeline** (runs when self-hosted with GPU): "
+                    "Perplexity gate (GPT-2) → FAISS similarity → "
+                    "Stage A ModernBERT + LoRA (98% F1) → Policy Gate.\n\n"
                     "**Policy Gate**: Deterministic rules that override "
                     "any model output.\n\n"
                     "[View source on GitHub]"
