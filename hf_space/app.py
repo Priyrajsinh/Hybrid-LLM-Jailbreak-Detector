@@ -96,6 +96,7 @@ def _heuristic_classify(text: str) -> dict[str, Any]:
 
 # ── Llama Guard 3 via Together AI ────────────────────────────────────────────
 _TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "")
+_last_api_error: str = ""
 
 # Llama Guard 3 category → human-readable attack type
 _LG_CATEGORIES: dict[str, str] = {
@@ -120,6 +121,7 @@ _INJECTION_CATS = {"S13", "S14"}
 
 def _together_classify(text: str) -> Optional[dict[str, Any]]:
     """Call Llama Guard 3 via Together AI. Returns None if API unavailable."""
+    global _last_api_error
     if not _TOGETHER_API_KEY:
         return None
     try:
@@ -140,6 +142,7 @@ def _together_classify(text: str) -> Optional[dict[str, Any]]:
         content = resp.json()["choices"][0]["message"]["content"].strip()
         lines = content.split("\n")
         verdict = lines[0].strip().lower()
+        _last_api_error = ""
 
         if verdict == "safe":
             return {
@@ -174,8 +177,10 @@ def _together_classify(text: str) -> Optional[dict[str, Any]]:
                     ),
                 },
             }
+        _last_api_error = f"unexpected verdict: {verdict!r}"
         return None
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        _last_api_error = str(exc)
         return None
 
 
@@ -578,13 +583,18 @@ def build_app() -> gr.Blocks:
                                 label="Latency Comparison",
                                 value=_build_latency_plot(),
                             )
-                        gr.JSON(
-                            label="Stage Config",
-                            value={
+                        api_status_btn = gr.Button(
+                            "Check API Status", variant="secondary"
+                        )
+                        api_status_json = gr.JSON(label="API Status")
+                        api_status_btn.click(
+                            fn=lambda: {
                                 "classifier": _CONFIG["stage_b"]["model"],
                                 "api_key_set": bool(_TOGETHER_API_KEY),
+                                "last_api_error": _last_api_error or "none",
                                 "fallback": "keyword_heuristic",
                             },
+                            outputs=[api_status_json],
                         )
 
             # ── Tab 3: How It Works ───────────────────────────────────
