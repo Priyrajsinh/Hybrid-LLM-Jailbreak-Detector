@@ -584,7 +584,7 @@ if __name__ == "__main__":
     demo.launch(
         theme=get_theme(),
         css=get_css(),
-        server_name="0.0.0.0",
+        server_name="0.0.0.0",  # nosec B104
         server_port=7860,
         share=False,
     )

@@ -29,6 +29,7 @@ peft
 datasets
 accelerate
 gradio>=5.0
+plotly>=5.22.0
 faiss-cpu
 sentence-transformers
 captum
