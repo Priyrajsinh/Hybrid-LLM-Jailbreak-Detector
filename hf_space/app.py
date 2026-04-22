@@ -413,6 +413,38 @@ _CSS = """
     font-size: 0.85rem;
     border-radius: 0 6px 6px 0;
 }
+/* ── Tab visibility + clickability ─────────────────────────────────
+ * Without these rules the inline white-on-dark hero/footer styles
+ * land on Gradio's default theme and tab labels render with low
+ * contrast — users see tabs as "unclickable" because the labels
+ * are barely visible. These rules force a readable, hoverable,
+ * always-clickable tab strip without overriding the rest of the
+ * theme.
+ */
+button[role="tab"] {
+    color: rgba(255, 255, 255, 0.7) !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 10px 18px !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    opacity: 1 !important;
+}
+button[role="tab"]:hover {
+    color: #ffffff !important;
+    background: rgba(99, 102, 241, 0.12) !important;
+}
+button[role="tab"][aria-selected="true"],
+button[role="tab"].selected {
+    color: #ffffff !important;
+    border-bottom: 2px solid #6366f1 !important;
+}
+/* Ensure the tab strip itself isn't covered by any sibling */
+div[role="tablist"] {
+    position: relative;
+    z-index: 10;
+}
 """
 
 _HERO = """
@@ -648,8 +680,18 @@ def build_app() -> gr.Blocks:
 
 
 if __name__ == "__main__":
+    # Gradio 6: theme + css belong on launch(), not on gr.Blocks().
+    # Dark-friendly Base theme so the white-text hero/footer HTML render
+    # against a dark surface — without this the inline-styled subtitles
+    # are invisible and the tab labels look low-contrast / unclickable.
+    _theme = gr.themes.Base(
+        primary_hue="indigo",
+        secondary_hue="purple",
+        neutral_hue="slate",
+    )
     demo = build_app()
     demo.launch(
+        theme=_theme,
         css=_CSS,
         server_name="0.0.0.0",
         server_port=7860,
