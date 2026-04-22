@@ -43,8 +43,13 @@ _INJECTION_PATTERNS = [
     r"<\s*system\s*>",
     r"\{\{.*inject.*\}\}",
     r"ignore\s+the\s+above.*instructions",
-    r"(print|reveal|output)\s+(admin|password|secret|key)",
+    # "ignore safety guidelines", "ignore all rules", etc.
+    r"ignore\s+(safety|security|all\s+)?(guidelines|rules|filters|restrictions)",
+    # "reveal the key", "reveal secret", "print the password", etc.
+    r"(print|reveal|output)\s+(?:\w+\s+)?(admin|password|secret|key|token)",
     r"(execute|run)\s+(as\s+root|rm\s+-rf|format)",
+    # "Document says: ignore ..." — classic indirect injection frame
+    r"(document|context|text|email|page)\s+says?\s*:.*ignore",
 ]
 
 
@@ -426,7 +431,26 @@ button.primary:hover {
 .result-reveal { animation: slideUpFadeIn .4s ease-out forwards !important; }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 3px; }
-label, p { color: rgba(255,255,255,0.85) !important; }
+label, p, span { color: rgba(255,255,255,0.85) !important; }
+/* Tab button visibility */
+button[role="tab"] {
+    color: rgba(255,255,255,0.65) !important;
+    background: transparent !important;
+    font-size: 0.95rem !important;
+    font-weight: 500 !important;
+}
+button[role="tab"][aria-selected="true"],
+button[role="tab"].selected {
+    color: white !important;
+    border-bottom: 2px solid #6366f1 !important;
+    font-weight: 700 !important;
+}
+/* Secondary / outline buttons */
+button:not(.primary) { color: rgba(255,255,255,0.85) !important; }
+/* Textarea text */
+textarea, input[type="text"] {
+    color: rgba(255,255,255,0.92) !important;
+}
 .decision-allow {
     background: linear-gradient(135deg,#065f46,#059669) !important;
     color: white !important; border-radius: 12px !important;

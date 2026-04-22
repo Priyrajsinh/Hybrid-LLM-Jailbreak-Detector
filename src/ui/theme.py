@@ -106,9 +106,25 @@ textarea:focus, input:focus {
 ::-webkit-scrollbar-thumb:hover { background: #4f46e5; }
 
 /* Readable text */
-label, .label-wrap, p {
+label, .label-wrap, p, span {
     color: rgba(255, 255, 255, 0.85) !important;
 }
+
+/* Tab button visibility */
+button[role="tab"] {
+    color: rgba(255, 255, 255, 0.65) !important;
+    background: transparent !important;
+    font-size: 0.95rem !important;
+    font-weight: 500 !important;
+}
+button[role="tab"][aria-selected="true"],
+button[role="tab"].selected {
+    color: white !important;
+    border-bottom: 2px solid #6366f1 !important;
+    font-weight: 700 !important;
+}
+button:not(.primary) { color: rgba(255, 255, 255, 0.85) !important; }
+textarea, input[type="text"] { color: rgba(255, 255, 255, 0.92) !important; }
 
 /* Decision card variants */
 .decision-allow {
