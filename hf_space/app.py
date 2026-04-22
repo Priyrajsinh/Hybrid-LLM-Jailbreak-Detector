@@ -20,6 +20,22 @@ _CONFIG: dict[str, Any] = {
     "similarity_threshold": 0.85,
 }
 
+# ── Model card loader (sibling file, uploaded with the Space) ────────────────
+_MODEL_CARD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "MODEL_CARD.md")
+
+
+def _load_model_card() -> str:
+    try:
+        with open(_MODEL_CARD_PATH, encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return (
+            "## Model Card unavailable\n\n"
+            "MODEL_CARD.md was not bundled with this Space. "
+            "Read it on GitHub: "
+            "https://github.com/Priyrajsinh/Hybrid-LLM-Jailbreak-Detector/blob/main/MODEL_CARD.md"
+        )
+
 # ── Jailbreak keyword heuristic (fallback when models unavailable) ────────────
 _JAILBREAK_PATTERNS = [
     r"ignore\s+(previous|all|your)\s+instructions",
@@ -616,6 +632,15 @@ def build_app() -> gr.Blocks:
                     "[View source on GitHub]"
                     "(https://github.com/Priyrajsinh/Hybrid-LLM-Jailbreak-Detector)"
                 )
+
+            # ── Tab 4: Model Card ──────────────────────────────────────
+            with gr.Tab("Model Card"):
+                gr.Markdown(
+                    "Full model card — intended use, training data, evaluation, "
+                    "Stage B hardware requirements, **known limitations**, and "
+                    "EU AI Act considerations."
+                )
+                gr.Markdown(_load_model_card())
 
         gr.HTML(_FOOTER)
 
