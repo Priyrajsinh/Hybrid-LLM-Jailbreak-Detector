@@ -58,12 +58,23 @@ module = [
     "prometheus_fastapi_instrumentator.*",
     "together",
     "together.*",
+    "gradio",
+    "gradio.*",
+    "plotly",
+    "plotly.*",
+    "yaml",
 ]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-filterwarnings = ["error::DeprecationWarning"]
+filterwarnings = [
+    "error::DeprecationWarning",
+    "ignore::DeprecationWarning:gradio",
+    "ignore::DeprecationWarning:httpx",
+    "ignore::DeprecationWarning:anyio",
+    "ignore::DeprecationWarning:starlette",
+]
 
 [tool.coverage.run]
 omit = [
