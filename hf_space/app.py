@@ -7,7 +7,6 @@ Stage A (ModernBERT-base) is loaded when available; falls back to heuristic.
 
 from __future__ import annotations
 
-import json
 import os
 import re
 from typing import Any, Generator, Optional
@@ -175,33 +174,13 @@ def _model_classify(text: str) -> dict[str, Any]:
         return {**_heuristic_classify(text), "reason_tags": [f"model_error:{exc}"]}
 
 
-# ── Perplexity gate (inline GPT-2) ────────────────────────────────────────────
-_ppl_model: Optional[Any] = None
-_ppl_tokenizer: Optional[Any] = None
+# ── Perplexity gate ───────────────────────────────────────────────────────────
 
 
 def _perplexity(text: str) -> float:
-    global _ppl_model, _ppl_tokenizer
-    try:
-        if _ppl_model is None:
-            from transformers import (  # type: ignore[import]
-                GPT2LMHeadModel,
-                GPT2TokenizerFast,
-            )
-
-            _ppl_tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")  # nosec B615
-            _ppl_model = GPT2LMHeadModel.from_pretrained("gpt2")  # nosec B615
-
-        import torch  # type: ignore[import]
-
-        enc = _ppl_tokenizer(
-            text, return_tensors="pt", truncation=True, max_length=1024
-        )
-        with torch.no_grad():
-            loss = _ppl_model(**enc, labels=enc["input_ids"]).loss
-        return float(torch.exp(loss).item())
-    except Exception:  # noqa: BLE001
-        return 100.0  # neutral score on error
+    # Disabled on HF Space — GPT-2 download blocks the event loop on free tier
+    del text
+    return 100.0
 
 
 # ── Normalizer (inline) ───────────────────────────────────────────────────────
@@ -247,10 +226,10 @@ def _decision_card(decision: str, confidence: float, label: str) -> str:
 def classify_stream(
     prompt: str,
     context: str,
-) -> Generator[tuple[str, str], None, None]:
-    """Yield (stage_html, json_state) tuples — one per pipeline step."""
+) -> Generator[tuple[str, dict[str, Any]], None, None]:
+    """Yield (stage_html, state_dict) tuples — one per pipeline step."""
     if not prompt.strip():
-        yield "<div class='stage-step'>⚠️ Please enter a prompt.</div>", "{}"
+        yield "<div class='stage-step'>⚠️ Please enter a prompt.</div>", {}
         return
 
     ctx = context.strip() if context else ""
@@ -261,17 +240,15 @@ def classify_stream(
 
     # Step 1: Normalize
     steps += "<div class='stage-step'>🔧 <b>Step 1</b> — Normalizing input...</div>"
-    yield steps, "{}"
+    yield steps, {}
     normalized, norm_tags = _normalize(full_text)
     if norm_tags:
         steps += f"<div class='stage-step'>   ✓ Applied: {', '.join(norm_tags)}</div>"
     state["norm_tags"] = norm_tags
 
     # Step 2: Perplexity gate
-    steps += (
-        "<div class='stage-step'>📊 <b>Step 2</b> — Perplexity gate (GPT-2)...</div>"
-    )
-    yield steps, json.dumps(state)
+    steps += "<div class='stage-step'>📊 <b>Step 2</b> — Perplexity gate...</div>"
+    yield steps, state
     ppl = _perplexity(normalized)
     state["perplexity"] = round(ppl, 1)
     threshold = _CONFIG["perplexity_threshold"]
@@ -290,14 +267,14 @@ def classify_stream(
             }
         )
         steps += _decision_card("block", 0.99, "anomaly")
-        yield steps, json.dumps(state)
+        yield steps, state
         return
 
     # Step 3: Heuristic / Stage A
     steps += (
         "<div class='stage-step'>🤖 <b>Step 3</b> — Stage A classification...</div>"
     )
-    yield steps, json.dumps(state)
+    yield steps, state
 
     result = _model_classify(normalized)
     state.update(result)
@@ -321,12 +298,15 @@ def classify_stream(
             f"ℹ️ {_model_error}</div>"
         )
 
-    yield steps, json.dumps(state, default=str)
+    yield steps, state
 
 
-def batch_fn(text: str) -> tuple[str, str]:
+def batch_fn(text: str) -> tuple[str, list[dict[str, Any]]]:
     if not text.strip():
-        return "<p style='color:rgba(255,255,255,0.5)'>Paste prompts above.</p>", "{}"
+        return (
+            "<p style='color:rgba(255,255,255,0.5)'>Paste prompts above.</p>",
+            [],
+        )
     lines = [ln.strip() for ln in text.strip().split("\n") if ln.strip()][:20]
     html_parts: list[str] = []
     raw: list[dict[str, Any]] = []
@@ -347,7 +327,7 @@ def batch_fn(text: str) -> tuple[str, str]:
             f'font-size:0.8rem">{result["confidence"]:.1%}</span></div>'
         )
         raw.append(result)
-    return "".join(html_parts), json.dumps(raw, indent=2, default=str)
+    return "".join(html_parts), raw
 
 
 def _build_calibration_plot() -> go.Figure:
