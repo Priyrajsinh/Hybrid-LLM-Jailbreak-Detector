@@ -499,24 +499,26 @@ def build_app() -> gr.Blocks:
                             ),
                             label="Detection Pipeline",
                         )
+                        feedback_status = gr.Textbox(
+                            label="Feedback",
+                            interactive=False,
+                            show_label=False,
+                            placeholder="",
+                        )
                         with gr.Row():
                             thumbs_up_btn = gr.Button("👍 Correct", variant="secondary")
                             thumbs_dn_btn = gr.Button(
                                 "👎 Incorrect", variant="secondary"
                             )
-                        feedback_status = gr.Textbox(
-                            label="",
-                            interactive=False,
-                            show_label=False,
-                            visible=False,
-                        )
                         with gr.Group(visible=False) as fb_group:
-                            gr.Dropdown(
+                            correction_dd = gr.Dropdown(
                                 choices=["safe", "jailbreak", "indirect_injection"],
                                 label="Correct label",
                                 value="safe",
                             )
-                            gr.Button("Submit Correction", variant="primary")
+                            submit_btn = gr.Button(
+                                "Submit Correction", variant="primary"
+                            )
 
                 analyze_btn.click(
                     fn=classify_stream,
@@ -524,12 +526,29 @@ def build_app() -> gr.Blocks:
                     outputs=[flow_html],
                 )
                 thumbs_up_btn.click(
-                    fn=lambda: "Thank you for confirming!",
-                    outputs=[feedback_status],
+                    fn=lambda: (
+                        gr.update(value="✅ Thanks for confirming!"),
+                        gr.update(visible=False),
+                    ),
+                    outputs=[feedback_status, fb_group],
                 )
                 thumbs_dn_btn.click(
-                    fn=lambda: gr.update(visible=True),
-                    outputs=[fb_group],
+                    fn=lambda: (
+                        gr.update(value=""),
+                        gr.update(visible=True),
+                    ),
+                    outputs=[feedback_status, fb_group],
+                )
+                submit_btn.click(
+                    fn=lambda label: (
+                        gr.update(
+                            value=f"✅ Correction recorded: '{label}'. "
+                            "Thank you — this helps improve the model."
+                        ),
+                        gr.update(visible=False),
+                    ),
+                    inputs=[correction_dd],
+                    outputs=[feedback_status, fb_group],
                 )
 
             # ── Tab 2: Security Lab ───────────────────────────────────
