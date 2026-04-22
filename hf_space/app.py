@@ -16,7 +16,7 @@ import plotly.graph_objects as go
 
 # ── Inline config (C12: no src/ imports) ─────────────────────────────────────
 _CONFIG: dict[str, Any] = {
-    "stage_b": {"enabled": True, "model": "meta-llama/Meta-Llama-Guard-3-8B"},
+    "stage_b": {"enabled": True, "model": "llama-guard-3-8b (Groq)"},
     "similarity_threshold": 0.85,
 }
 
@@ -94,8 +94,8 @@ def _heuristic_classify(text: str) -> dict[str, Any]:
     }
 
 
-# ── Llama Guard 3 via Together AI ────────────────────────────────────────────
-_TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "")
+# ── Llama Guard 3 via Groq ────────────────────────────────────────────────────
+_GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 _last_api_error: str = ""
 
 # Llama Guard 3 category → human-readable attack type
@@ -120,18 +120,18 @@ _INJECTION_CATS = {"S13", "S14"}
 
 
 def _together_classify(text: str) -> Optional[dict[str, Any]]:
-    """Call Llama Guard 3 via Together AI. Returns None if API unavailable."""
+    """Call Llama Guard 3 via Groq. Returns None if API unavailable."""
     global _last_api_error
-    if not _TOGETHER_API_KEY:
+    if not _GROQ_API_KEY:
         return None
     try:
         import httpx  # type: ignore[import]
 
         resp = httpx.post(
-            "https://api.together.xyz/v1/chat/completions",
-            headers={"Authorization": f"Bearer {_TOGETHER_API_KEY}"},
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {_GROQ_API_KEY}"},
             json={
-                "model": "meta-llama/Meta-Llama-Guard-3-8B",
+                "model": "llama-guard-3-8b",
                 "messages": [{"role": "user", "content": text}],
                 "max_tokens": 50,
                 "temperature": 0,
@@ -254,7 +254,7 @@ def classify_stream(
 
     # Step 2: Classify (Llama Guard 3 via API, or heuristic fallback)
     classifier_name = (
-        "Llama Guard 3 (Together AI)" if _TOGETHER_API_KEY else "keyword heuristic"
+        "Llama Guard 3 (Together AI)" if _GROQ_API_KEY else "keyword heuristic"
     )
     steps += (
         f"<div class='stage-step'>🛡️ <b>Step 2</b>"
@@ -590,7 +590,7 @@ def build_app() -> gr.Blocks:
                         api_status_btn.click(
                             fn=lambda: {
                                 "classifier": _CONFIG["stage_b"]["model"],
-                                "api_key_set": bool(_TOGETHER_API_KEY),
+                                "api_key_set": bool(_GROQ_API_KEY),
                                 "last_api_error": _last_api_error or "none",
                                 "fallback": "keyword_heuristic",
                             },
