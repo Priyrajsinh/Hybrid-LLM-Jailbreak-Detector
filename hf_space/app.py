@@ -364,140 +364,33 @@ def _build_latency_plot() -> go.Figure:
     return fig
 
 
-# ── CSS ───────────────────────────────────────────────────────────────────────
+# ── CSS — only custom classes, nothing that touches Gradio internals ──────────
 _CSS = """
-/* ── Background ── */
-body, .gradio-container, .main, footer { background: transparent !important; }
-gradio-app {
-    background: linear-gradient(135deg,#0f0c29,#302b63,#24243e) !important;
-    min-height: 100vh;
-}
-
-/* ── All inputs dark ── */
-textarea, input, select, .input-wrap input {
-    background: #1e1b4b !important;
-    color: #e0e7ff !important;
-    border: 1px solid rgba(99,102,241,0.35) !important;
-    border-radius: 8px !important;
-}
-textarea::placeholder, input::placeholder { color: rgba(255,255,255,0.35) !important; }
-textarea:focus, input:focus {
-    border-color: #6366f1 !important;
-    box-shadow: 0 0 0 2px rgba(99,102,241,0.3) !important;
-    outline: none !important;
-}
-
-/* ── Blocks / cards ── */
-.block, .panel, .form, .gap, .contain {
-    background: rgba(255,255,255,0.04) !important;
-    border: 1px solid rgba(255,255,255,0.08) !important;
-    border-radius: 12px !important;
-}
-
-/* ── All text ── */
-*, *::before, *::after { color: rgba(255,255,255,0.88); }
-label, .label-wrap span {
-    color: rgba(255,255,255,0.65) !important;
-    font-size: .85rem !important;
-}
-p, li { color: rgba(255,255,255,0.85) !important; }
-
-/* ── Markdown (How It Works tab) ── */
-.prose, .prose *, .md, [class*="prose"] {
-    color: rgba(255,255,255,0.85) !important;
-    background: transparent !important;
-}
-.prose code, code, pre {
-    background: rgba(99,102,241,0.15) !important;
-    color: #c7d2fe !important;
-    border-radius: 4px !important;
-}
-pre { padding: 12px !important; }
-
-/* ── Examples table ── */
-table { background: transparent !important; border-collapse: collapse !important; }
-table th {
-    background: rgba(99,102,241,0.2) !important;
-    color: white !important;
-    padding: 8px 12px !important;
-}
-table td {
-    background: rgba(15,12,41,0.5) !important;
-    color: rgba(255,255,255,0.8) !important;
-    border: 1px solid rgba(255,255,255,0.07) !important;
-    padding: 8px 12px !important;
-}
-table tr:hover td { background: rgba(99,102,241,0.15) !important; cursor: pointer; }
-
-/* ── Buttons ── */
-button {
-    background: rgba(30,27,75,0.8) !important;
-    color: rgba(255,255,255,0.88) !important;
-    border: 1px solid rgba(255,255,255,0.12) !important;
-    border-radius: 8px !important;
-}
-button.primary {
-    background: linear-gradient(90deg,#4f46e5,#7c3aed) !important;
-    border: none !important;
-    color: white !important;
-    font-weight: 600 !important;
-    transition: transform .2s, box-shadow .2s !important;
-}
-button.primary:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 0 20px rgba(99,102,241,.5) !important;
-}
-button[role="tab"] {
-    background: transparent !important;
-    border: none !important;
-    color: rgba(255,255,255,0.55) !important;
-    font-size: .95rem !important;
-    border-radius: 0 !important;
-}
-button[role="tab"][aria-selected="true"] {
-    color: white !important;
-    border-bottom: 2px solid #6366f1 !important;
-    font-weight: 700 !important;
-}
-
-/* ── Accordion ── */
-.accordion { background: rgba(15,12,41,0.6) !important; }
-
-/* ── Scrollbar ── */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 3px; }
-
-/* ── Animations ── */
 @keyframes slideUpFadeIn {
-    from { opacity:0; transform:translateY(16px); }
-    to   { opacity:1; transform:translateY(0); }
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
-.result-reveal { animation: slideUpFadeIn .35s ease-out forwards !important; }
-
-/* ── Decision cards ── */
+.result-reveal { animation: slideUpFadeIn 0.35s ease-out forwards; }
 .decision-allow {
-    background: linear-gradient(135deg,#065f46,#059669) !important;
-    color: white !important; border-radius: 12px !important;
-    padding: 28px !important; text-align: center !important;
+    background: linear-gradient(135deg, #065f46, #059669);
+    color: white; border-radius: 12px;
+    padding: 28px; text-align: center;
 }
 .decision-block {
-    background: linear-gradient(135deg,#7f1d1d,#dc2626) !important;
-    color: white !important; border-radius: 12px !important;
-    padding: 28px !important; text-align: center !important;
+    background: linear-gradient(135deg, #7f1d1d, #dc2626);
+    color: white; border-radius: 12px;
+    padding: 28px; text-align: center;
 }
 .decision-review {
-    background: linear-gradient(135deg,#78350f,#d97706) !important;
-    color: white !important; border-radius: 12px !important;
-    padding: 28px !important; text-align: center !important;
+    background: linear-gradient(135deg, #78350f, #d97706);
+    color: white; border-radius: 12px;
+    padding: 28px; text-align: center;
 }
-
-/* ── Pipeline steps ── */
 .stage-step {
-    padding: 6px 14px !important; margin: 3px 0 !important;
-    border-left: 3px solid #6366f1 !important;
-    color: rgba(255,255,255,.85) !important; font-size: .85rem !important;
-    background: rgba(99,102,241,0.07) !important;
-    border-radius: 0 6px 6px 0 !important;
+    padding: 6px 14px; margin: 3px 0;
+    border-left: 3px solid #6366f1;
+    font-size: 0.85rem;
+    border-radius: 0 6px 6px 0;
 }
 """
 
@@ -571,25 +464,7 @@ _EXAMPLES = [
 
 
 def build_app() -> gr.Blocks:
-    _theme = gr.themes.Base(
-        primary_hue=gr.themes.colors.indigo,
-        secondary_hue=gr.themes.colors.purple,
-        neutral_hue=gr.themes.colors.slate,
-    ).set(
-        body_background_fill="#0f0c29",
-        body_text_color="#e0e7ff",
-        block_background_fill="rgba(255,255,255,0.04)",
-        block_border_color="rgba(255,255,255,0.08)",
-        block_label_text_color="rgba(255,255,255,0.6)",
-        input_background_fill="#1e1b4b",
-        input_border_color="rgba(99,102,241,0.35)",
-        button_primary_background_fill="linear-gradient(90deg,#4f46e5,#7c3aed)",
-        button_primary_text_color="white",
-        button_secondary_background_fill="rgba(30,27,75,0.8)",
-        button_secondary_text_color="rgba(255,255,255,0.88)",
-        button_secondary_border_color="rgba(255,255,255,0.12)",
-    )
-    with gr.Blocks(title="Hybrid Jailbreak Detector", theme=_theme) as app:
+    with gr.Blocks(title="Hybrid Jailbreak Detector") as app:
         gr.HTML(_HERO)
 
         with gr.Tabs():
