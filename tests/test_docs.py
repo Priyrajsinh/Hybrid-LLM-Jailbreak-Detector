@@ -4,6 +4,7 @@ import re
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 README = os.path.join(REPO_ROOT, "README.md")
 MODEL_CARD = os.path.join(REPO_ROOT, "MODEL_CARD.md")
+HF_MODEL_CARD = os.path.join(REPO_ROOT, "hf_space", "MODEL_CARD.md")
 
 FORBIDDEN_TERMS = ["Claude", "Sonnet", "Opus", "Anthropic"]
 
@@ -35,3 +36,17 @@ def test_no_claude_mentions() -> None:
         body = _read(path)
         hits = [t for t in FORBIDDEN_TERMS if re.search(rf"\b{t}\b", body)]
         assert not hits, f"{os.path.basename(path)} contains forbidden terms: {hits}"
+
+
+def test_hf_space_has_model_card() -> None:
+    assert os.path.isfile(HF_MODEL_CARD), (
+        "hf_space/MODEL_CARD.md must exist so the live HF Space can render it "
+        "in the Model Card tab"
+    )
+
+
+def test_hf_model_card_in_sync_with_root() -> None:
+    assert _read(HF_MODEL_CARD) == _read(MODEL_CARD), (
+        "hf_space/MODEL_CARD.md drifted from MODEL_CARD.md — "
+        "re-copy after editing the root model card"
+    )
