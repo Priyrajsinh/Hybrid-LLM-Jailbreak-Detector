@@ -230,25 +230,22 @@ def _decision_card(decision: str, confidence: float, label: str) -> str:
 def classify_stream(
     prompt: str,
     context: str,
-) -> Generator[tuple[str, dict[str, Any]], None, None]:
-    """Yield (stage_html, state_dict) tuples — one per pipeline step."""
+) -> Generator[str, None, None]:
+    """Yield stage_html strings — one per pipeline step."""
     if not prompt.strip():
-        yield "<div class='stage-step'>⚠️ Please enter a prompt.</div>", {}
+        yield "<div class='stage-step'>⚠️ Please enter a prompt.</div>"
         return
 
     ctx = context.strip() if context else ""
     full_text = f"{prompt}\n\nContext: {ctx}" if ctx else prompt
 
     steps = ""
-    state: dict[str, Any] = {}
-
     # Step 1: Normalize
     steps += "<div class='stage-step'>🔧 <b>Step 1</b> — Normalizing input...</div>"
-    yield steps, {}
+    yield steps
     normalized, norm_tags = _normalize(full_text)
     if norm_tags:
         steps += f"<div class='stage-step'>   ✓ Applied: {', '.join(norm_tags)}</div>"
-    state["norm_tags"] = norm_tags
 
     # Step 2: Classify (Llama Guard 3 via API, or heuristic fallback)
     classifier_name = (
@@ -258,10 +255,9 @@ def classify_stream(
         f"<div class='stage-step'>🛡️ <b>Step 2</b>"
         f" — Running {classifier_name}...</div>"
     )
-    yield steps, state
+    yield steps
 
     result = _model_classify(normalized)
-    state.update(result)
     steps += (
         f"<div class='stage-step'>   ✓ {result['stage_used']} → "
         f"{result['label']} ({result['confidence']:.1%})</div>"
@@ -276,7 +272,7 @@ def classify_stream(
         )
         steps += f'<div style="margin-top:10px">{spans}</div>'
 
-    yield steps, state
+    yield steps
 
 
 def batch_fn(text: str) -> tuple[str, list[dict[str, Any]]]:
@@ -370,60 +366,115 @@ def _build_latency_plot() -> go.Figure:
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
 _CSS = """
-body, .gradio-container {
-    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e) !important;
+/* ── Background ── */
+body, .gradio-container, .main, footer { background: transparent !important; }
+gradio-app {
+    background: linear-gradient(135deg,#0f0c29,#302b63,#24243e) !important;
     min-height: 100vh;
 }
-.block, .panel, .form {
-    background: rgba(255,255,255,0.05) !important;
-    backdrop-filter: blur(12px) !important;
-    border: 1px solid rgba(255,255,255,0.1) !important;
-    border-radius: 12px !important;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.3) !important;
+
+/* ── All inputs dark ── */
+textarea, input, select, .input-wrap input {
+    background: #1e1b4b !important;
+    color: #e0e7ff !important;
+    border: 1px solid rgba(99,102,241,0.35) !important;
+    border-radius: 8px !important;
 }
-h1 {
-    background: linear-gradient(90deg,#6366f1,#a855f7) !important;
-    -webkit-background-clip: text !important;
-    -webkit-text-fill-color: transparent !important;
-    background-clip: text !important;
-    font-weight: 800 !important;
+textarea::placeholder, input::placeholder { color: rgba(255,255,255,0.35) !important; }
+textarea:focus, input:focus {
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 2px rgba(99,102,241,0.3) !important;
+    outline: none !important;
+}
+
+/* ── Blocks / cards ── */
+.block, .panel, .form, .gap, .contain {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 12px !important;
+}
+
+/* ── All text ── */
+*, *::before, *::after { color: rgba(255,255,255,0.88); }
+label, .label-wrap span {
+    color: rgba(255,255,255,0.65) !important;
+    font-size: .85rem !important;
+}
+p, li { color: rgba(255,255,255,0.85) !important; }
+
+/* ── Markdown (How It Works tab) ── */
+.prose, .prose *, .md, [class*="prose"] {
+    color: rgba(255,255,255,0.85) !important;
+    background: transparent !important;
+}
+.prose code, code, pre {
+    background: rgba(99,102,241,0.15) !important;
+    color: #c7d2fe !important;
+    border-radius: 4px !important;
+}
+pre { padding: 12px !important; }
+
+/* ── Examples table ── */
+table { background: transparent !important; border-collapse: collapse !important; }
+table th {
+    background: rgba(99,102,241,0.2) !important;
+    color: white !important;
+    padding: 8px 12px !important;
+}
+table td {
+    background: rgba(15,12,41,0.5) !important;
+    color: rgba(255,255,255,0.8) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    padding: 8px 12px !important;
+}
+table tr:hover td { background: rgba(99,102,241,0.15) !important; cursor: pointer; }
+
+/* ── Buttons ── */
+button {
+    background: rgba(30,27,75,0.8) !important;
+    color: rgba(255,255,255,0.88) !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
+    border-radius: 8px !important;
 }
 button.primary {
     background: linear-gradient(90deg,#4f46e5,#7c3aed) !important;
     border: none !important;
+    color: white !important;
+    font-weight: 600 !important;
     transition: transform .2s, box-shadow .2s !important;
 }
 button.primary:hover {
     transform: translateY(-2px) !important;
-    box-shadow: 0 0 20px rgba(99,102,241,.6) !important;
+    box-shadow: 0 0 20px rgba(99,102,241,.5) !important;
 }
-@keyframes slideUpFadeIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-.result-reveal { animation: slideUpFadeIn .4s ease-out forwards !important; }
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 3px; }
-label, p, span { color: rgba(255,255,255,0.85) !important; }
-/* Tab button visibility */
 button[role="tab"] {
-    color: rgba(255,255,255,0.65) !important;
     background: transparent !important;
-    font-size: 0.95rem !important;
-    font-weight: 500 !important;
+    border: none !important;
+    color: rgba(255,255,255,0.55) !important;
+    font-size: .95rem !important;
+    border-radius: 0 !important;
 }
-button[role="tab"][aria-selected="true"],
-button[role="tab"].selected {
+button[role="tab"][aria-selected="true"] {
     color: white !important;
     border-bottom: 2px solid #6366f1 !important;
     font-weight: 700 !important;
 }
-/* Secondary / outline buttons */
-button:not(.primary) { color: rgba(255,255,255,0.85) !important; }
-/* Textarea text */
-textarea, input[type="text"] {
-    color: rgba(255,255,255,0.92) !important;
+
+/* ── Accordion ── */
+.accordion { background: rgba(15,12,41,0.6) !important; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 3px; }
+
+/* ── Animations ── */
+@keyframes slideUpFadeIn {
+    from { opacity:0; transform:translateY(16px); }
+    to   { opacity:1; transform:translateY(0); }
 }
+.result-reveal { animation: slideUpFadeIn .35s ease-out forwards !important; }
+
+/* ── Decision cards ── */
 .decision-allow {
     background: linear-gradient(135deg,#065f46,#059669) !important;
     color: white !important; border-radius: 12px !important;
@@ -439,10 +490,14 @@ textarea, input[type="text"] {
     color: white !important; border-radius: 12px !important;
     padding: 28px !important; text-align: center !important;
 }
+
+/* ── Pipeline steps ── */
 .stage-step {
-    padding: 6px 12px !important; margin: 3px 0 !important;
+    padding: 6px 14px !important; margin: 3px 0 !important;
     border-left: 3px solid #6366f1 !important;
-    color: rgba(255,255,255,.8) !important; font-size: .85rem !important;
+    color: rgba(255,255,255,.85) !important; font-size: .85rem !important;
+    background: rgba(99,102,241,0.07) !important;
+    border-radius: 0 6px 6px 0 !important;
 }
 """
 
@@ -457,7 +512,7 @@ _HERO = """
     Layered AI safety &mdash; perplexity gate + FAISS + ModernBERT + Llama Guard
   </p>
   <p style="color:rgba(255,255,255,.35);font-size:.8rem;margin-top:4px">
-    HF Space: Stage B disabled (no free-tier GPU). Stage A + heuristic active.
+    Powered by Llama Guard 3 via Together AI &mdash; results in 2&ndash;3 seconds.
   </p>
 </div>
 """
@@ -516,7 +571,25 @@ _EXAMPLES = [
 
 
 def build_app() -> gr.Blocks:
-    with gr.Blocks(title="Hybrid Jailbreak Detector") as app:
+    _theme = gr.themes.Base(
+        primary_hue=gr.themes.colors.indigo,
+        secondary_hue=gr.themes.colors.purple,
+        neutral_hue=gr.themes.colors.slate,
+    ).set(
+        body_background_fill="#0f0c29",
+        body_text_color="#e0e7ff",
+        block_background_fill="rgba(255,255,255,0.04)",
+        block_border_color="rgba(255,255,255,0.08)",
+        block_label_text_color="rgba(255,255,255,0.6)",
+        input_background_fill="#1e1b4b",
+        input_border_color="rgba(99,102,241,0.35)",
+        button_primary_background_fill="linear-gradient(90deg,#4f46e5,#7c3aed)",
+        button_primary_text_color="white",
+        button_secondary_background_fill="rgba(30,27,75,0.8)",
+        button_secondary_text_color="rgba(255,255,255,0.88)",
+        button_secondary_border_color="rgba(255,255,255,0.12)",
+    )
+    with gr.Blocks(title="Hybrid Jailbreak Detector", theme=_theme) as app:
         gr.HTML(_HERO)
 
         with gr.Tabs():
@@ -551,14 +624,16 @@ def build_app() -> gr.Blocks:
                             ),
                             label="Detection Pipeline",
                         )
-                        result_json = gr.JSON(label="Raw Result")
                         with gr.Row():
-                            thumbs_up_btn = gr.Button("Correct", variant="secondary")
-                            thumbs_dn_btn = gr.Button("Incorrect", variant="secondary")
+                            thumbs_up_btn = gr.Button("👍 Correct", variant="secondary")
+                            thumbs_dn_btn = gr.Button(
+                                "👎 Incorrect", variant="secondary"
+                            )
                         feedback_status = gr.Textbox(
                             label="",
                             interactive=False,
                             show_label=False,
+                            visible=False,
                         )
                         with gr.Group(visible=False) as fb_group:
                             gr.Dropdown(
@@ -571,7 +646,7 @@ def build_app() -> gr.Blocks:
                 analyze_btn.click(
                     fn=classify_stream,
                     inputs=[prompt_box, context_box],
-                    outputs=[flow_html, result_json],
+                    outputs=[flow_html],
                 )
                 thumbs_up_btn.click(
                     fn=lambda: "Thank you for confirming!",
