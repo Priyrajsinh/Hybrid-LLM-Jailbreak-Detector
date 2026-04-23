@@ -35,5 +35,14 @@ jobs:
       - name: bandit
         run: bandit -r src/ -ll -ii
 
+      - name: radon complexity
+        run: radon cc src/ -nc
+
+      - name: interrogate docstrings
+        run: interrogate src/ --fail-under=80
+
+      - name: pip-audit
+        run: pip-audit -r requirements.txt
+
       - name: pytest
         run: pytest --cov=src --cov-fail-under=70
