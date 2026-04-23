@@ -58,6 +58,7 @@ class InputNormalizer:
     """Homoglyph mapping, zero-width char stripping, leetspeak normalization."""
 
     def __init__(self, config: dict[str, Any]) -> None:
+        """Load normalization flags from config.model.normalization."""
         norm_cfg: dict[str, Any] = config.get("model", {}).get("normalization", {})
         self._strip_zw: bool = bool(norm_cfg.get("strip_zero_width", True))
         self._map_homoglyphs: bool = bool(norm_cfg.get("normalize_homoglyphs", True))
@@ -108,6 +109,7 @@ class InputNormalizer:
         return result, applied
 
     def _convert_leetspeak(self, text: str) -> str:
+        """Replace leet digits adjacent to letters; leave standalone numerics."""
         # Only convert digits that sit adjacent to a letter — prevents mangling
         # legitimate numerics like "ip 127.0.0.1" or "year 2024".
         chars = list(text)

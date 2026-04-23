@@ -18,6 +18,7 @@ class SimilarityGate:
         index: Optional[Any] = None,
         attack_texts: Optional[list[str]] = None,
     ) -> None:
+        """Load similarity config; encoder/index are injectable for testing."""
         sim_cfg: dict[str, Any] = config["model"]["similarity"]
         self._model_name: str = str(sim_cfg["model_name"])
         self._threshold: float = float(sim_cfg["threshold"])
@@ -28,6 +29,7 @@ class SimilarityGate:
         self._logger = get_logger(__name__)
 
     def _ensure_encoder(self) -> None:
+        """Lazy-load SentenceTransformer encoder on first use."""
         if self._encoder is None:  # pragma: no cover - heavy download path
             from sentence_transformers import SentenceTransformer
 

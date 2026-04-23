@@ -18,12 +18,14 @@ class FeedbackStore:
     """SQLite-backed feedback loop + correction stats."""
 
     def __init__(self, db_path: str, min_corrections_for_retrain: int = 50) -> None:
+        """Create or open the SQLite store at db_path; initialise schema."""
         self._db_path = db_path
         self._min_for_retrain = min_corrections_for_retrain
         self._lock = threading.Lock()
         self._init_db()
 
     def _init_db(self) -> None:
+        """Create the corrections table if it does not already exist."""
         with sqlite3.connect(self._db_path) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS corrections (
@@ -40,6 +42,7 @@ class FeedbackStore:
             conn.commit()
 
     def submit_correction(self, request: FeedbackRequest) -> dict[str, Any]:
+        """Insert one correction row; return stored=True + total count."""
         ts = datetime.now(timezone.utc).isoformat()
         with self._lock:
             with sqlite3.connect(self._db_path) as conn:
@@ -71,6 +74,7 @@ class FeedbackStore:
         return {"stored": True, "total_corrections": total}
 
     def get_stats(self) -> dict[str, Any]:
+        """Return total corrections, breakdown by type/label, retrain_ready flag."""
         with sqlite3.connect(self._db_path) as conn:
             total: int = conn.execute("SELECT COUNT(*) FROM corrections").fetchone()[0]
 

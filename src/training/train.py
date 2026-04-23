@@ -22,6 +22,7 @@ MERGED_DIR = Path("models/stage_a_merged")
 
 
 def _compute_class_weights(labels: np.ndarray, num_labels: int) -> np.ndarray:
+    """Return inverse-frequency class weights for CrossEntropyLoss."""
     counts = np.bincount(labels.astype(int), minlength=num_labels).astype(float)
     counts[counts == 0] = 1.0
     weights = labels.shape[0] / (num_labels * counts)
@@ -34,6 +35,7 @@ def _tokenize_dataset(
     labels: list[int],
     max_length: int,
 ) -> Any:
+    """Tokenize texts + labels into a PyTorch Dataset; warns on truncation."""
     import torch
     from torch.utils.data import Dataset
 
@@ -49,7 +51,10 @@ def _tokenize_dataset(
         )
 
     class _DS(Dataset):  # type: ignore[type-arg,misc]
+        """Minimal PyTorch Dataset wrapping tokenized inputs and labels."""
+
         def __init__(self) -> None:
+            """Tokenize all texts at construction time."""
             self.enc = tokenizer(
                 texts,
                 truncation=True,
@@ -60,9 +65,11 @@ def _tokenize_dataset(
             self.labels = torch.tensor(labels, dtype=torch.long)
 
         def __len__(self) -> int:
+            """Return the number of samples."""
             return int(self.labels.shape[0])
 
         def __getitem__(self, idx: int) -> dict[str, Any]:
+            """Return input_ids, attention_mask and label for index idx."""
             return {
                 "input_ids": self.enc["input_ids"][idx],
                 "attention_mask": self.enc["attention_mask"][idx],

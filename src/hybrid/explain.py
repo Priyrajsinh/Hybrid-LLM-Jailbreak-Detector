@@ -25,6 +25,7 @@ class TokenExplainer:
         self._logger = get_logger(__name__)
 
     def _ensure_lig(self) -> None:
+        """Build LayerIntegratedGradients on first call; no-op thereafter."""
         if self._lig is not None:
             return
         # pragma: no cover - heavy captum import path
@@ -36,9 +37,11 @@ class TokenExplainer:
         )
 
     def _forward_fn(self, input_ids: Any) -> Any:  # pragma: no cover
+        """Forward pass returning max logit — required by LayerIntegratedGradients."""
         return self._model(input_ids).logits.max(dim=-1).values
 
     def explain(self, text: str) -> list[dict[str, str | float]]:
+        """Return token-level attribution scores via integrated gradients."""
         self._ensure_lig()
         assert self._lig is not None
 

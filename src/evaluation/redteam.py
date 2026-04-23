@@ -16,7 +16,11 @@ from src.logger import get_logger
 
 
 class _PipelineProtocol(Protocol):
-    def classify(self, request: ClassifyRequest) -> ClassifyResponse: ...
+    """Structural interface satisfied by HybridPipeline and test fakes."""
+
+    def classify(self, request: ClassifyRequest) -> ClassifyResponse:
+        """Classify a single request and return a ClassifyResponse."""
+        ...
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +147,7 @@ def _run_single_turn(
     pipeline: _PipelineProtocol,
     attacks: list[str],
 ) -> dict[str, Any]:
+    """Classify a list of attack strings; return block/allow/review counts."""
     n_blocked = n_human = n_allowed = 0
     for text in attacks:
         try:
@@ -170,6 +175,7 @@ def _run_requests(
     pipeline: _PipelineProtocol,
     requests: list[ClassifyRequest],
 ) -> dict[str, Any]:
+    """Classify a list of ClassifyRequests; return block/allow/review counts."""
     n_blocked = n_human = n_allowed = 0
     for req in requests:
         try:
@@ -198,6 +204,7 @@ def _run_multi_turn(
     requests: list[ClassifyRequest],
     op_name: str,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Classify multi-turn requests; return (stats, critical_findings)."""
     n_blocked = n_human = n_allowed = 0
     critical: list[dict[str, Any]] = []
     for req in requests:
@@ -247,6 +254,7 @@ class RedTeamHarness:
         pipeline: _PipelineProtocol,
         config: dict[str, Any],
     ) -> None:
+        """Wire pipeline + load redteam config (seed, n_mutations, output_dir)."""
         self._pipeline = pipeline
         self._config = config
         rt_cfg: dict[str, Any] = config.get("redteam", {})
