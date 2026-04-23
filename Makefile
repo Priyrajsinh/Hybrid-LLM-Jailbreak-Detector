@@ -8,7 +8,16 @@ test:
 	pytest tests/ -v --tb=short --cov=src --cov-fail-under=70
 
 security:
-	bandit -r src/ -ll -ii && pip-audit -r requirements.txt
+	bandit -r src/ -ll -ii
+
+complexity:
+	radon cc src/ -nc
+
+docstrings:
+	interrogate src/ --fail-under=80
+
+audit:
+	pip-audit -r requirements.txt && detect-secrets scan --baseline .secrets.baseline
 
 train-baseline:
 	python -m src.baseline.train_baseline
