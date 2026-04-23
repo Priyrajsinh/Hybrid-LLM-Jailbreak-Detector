@@ -112,14 +112,28 @@ class PolicyGate:
         stage_used = "stage_b" if stage_b_result is not None else "stage_a"
 
         block_a = self._check_stage_a_block(
-            probs, attack_conf, label_idx, label_name, stage_used,
-            stage_a_result, tags, ppl_score, sim_score,
+            probs,
+            attack_conf,
+            label_idx,
+            label_name,
+            stage_used,
+            stage_a_result,
+            tags,
+            ppl_score,
+            sim_score,
         )
         if block_a is not None:
             return block_a
 
         block_b = self._check_stage_b_block(
-            stage_b_result, probs, label_idx, label_name, stage_used, tags, ppl_score, sim_score
+            stage_b_result,
+            probs,
+            label_idx,
+            label_name,
+            stage_used,
+            tags,
+            ppl_score,
+            sim_score,
         )
         if block_b is not None:
             return block_b

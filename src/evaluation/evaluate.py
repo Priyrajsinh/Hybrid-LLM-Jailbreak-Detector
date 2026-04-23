@@ -591,8 +591,7 @@ def _print_comparison_table(
     print("  ".join([f"{'Model':{col_w}}"] + [f"{c:{num_w}}" for c in scalar_keys]))
     for row in (baseline_row, hybrid_row):
         row_parts = [f"{str(row['model']):{col_w}}"] + [
-            f"{float(row[k]):{num_w}.4f}"  # type: ignore[arg-type]
-            for k in scalar_keys
+            f"{float(row[k]):{num_w}.4f}" for k in scalar_keys  # type: ignore[arg-type]
         ]
         print("  ".join(row_parts))
 
@@ -608,8 +607,12 @@ def _plot_comparison_chart(
     metrics_to_plot = ["accuracy", "weighted_f1", "jailbreak_recall", "indirect_recall"]
     x = np.arange(len(metrics_to_plot))
     width = 0.35
-    baseline_vals = [float(baseline_row[m]) for m in metrics_to_plot]  # type: ignore[arg-type]
-    hybrid_vals = [float(hybrid_row[m]) for m in metrics_to_plot]  # type: ignore[arg-type]
+    baseline_vals = [
+        float(baseline_row[m]) for m in metrics_to_plot  # type: ignore[arg-type]
+    ]
+    hybrid_vals = [
+        float(hybrid_row[m]) for m in metrics_to_plot  # type: ignore[arg-type]
+    ]
 
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.bar(x - width / 2, baseline_vals, width, label="Baseline", color="steelblue")
@@ -656,7 +659,6 @@ def compare_baseline_vs_hybrid(
     import matplotlib
 
     matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
     import pandas as pd
 
     if test_data is None:

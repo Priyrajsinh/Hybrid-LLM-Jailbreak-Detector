@@ -50,6 +50,7 @@ _window_requests: int = 0
 
 
 def _get_config() -> dict[str, Any]:
+    """Return the lazily-loaded project config singleton."""
     global _config
     if _config is None:
         _config = load_config()
@@ -57,6 +58,7 @@ def _get_config() -> dict[str, Any]:
 
 
 def _get_pipeline() -> HybridPipeline:
+    """Return the lazily-initialised HybridPipeline singleton."""
     global _pipeline
     if _pipeline is None:
         _pipeline = HybridPipeline(_get_config())
@@ -64,6 +66,7 @@ def _get_pipeline() -> HybridPipeline:
 
 
 def _get_feedback_store() -> FeedbackStore:
+    """Return the lazily-initialised FeedbackStore singleton."""
     global _feedback_store
     if _feedback_store is None:
         cfg = _get_config()
@@ -111,6 +114,7 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
 @app.middleware("http")
 async def content_length_guard(request: Request, call_next: Any) -> Response:
+    """Reject requests whose Content-Length exceeds the configured MB limit."""
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > _max_payload_mb * 1024 * 1024:
         return JSONResponse(
@@ -122,6 +126,7 @@ async def content_length_guard(request: Request, call_next: Any) -> Response:
 
 @app.middleware("http")
 async def request_logger(request: Request, call_next: Any) -> Response:
+    """Assign a request ID, increment counters, and log every inbound HTTP request."""
     global _total_requests, _window_requests, _window_start
     _total_requests += 1
     _window_requests += 1
@@ -152,6 +157,7 @@ async def request_logger(request: Request, call_next: Any) -> Response:
 async def project_error_handler(
     request: Request, exc: ProjectBaseError
 ) -> JSONResponse:
+    """Return a 500 JSON response for any unhandled ProjectBaseError."""
     _logger.error("project_error", extra={"error": str(exc)})
     return JSONResponse(status_code=500, content={"detail": str(exc)})
 
@@ -163,6 +169,7 @@ async def project_error_handler(
 
 @app.get("/api/v1/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
+    """Return service health: uptime, memory, and pipeline/model load status."""
     proc = psutil.Process(os.getpid())
     mem_mb = proc.memory_info().rss / (1024 * 1024)
     pipeline_ready = _pipeline is not None
@@ -181,6 +188,7 @@ async def health() -> HealthResponse:
 @app.post("/api/v1/classify", response_model=ClassifyResponse)
 @limiter.limit(_rate_limit_str)
 async def classify(request: Request, body: ClassifyRequest) -> ClassifyResponse:
+    """Classify a single prompt through the full hybrid pipeline."""
     pipeline = _get_pipeline()
     result = pipeline.classify(body, explain=True)
     _logger.info(
@@ -201,6 +209,7 @@ async def classify(request: Request, body: ClassifyRequest) -> ClassifyResponse:
 async def classify_batch(
     request: Request, body: BatchClassifyRequest
 ) -> BatchClassifyResponse:
+    """Classify a batch of prompts; every item goes through the full gate stack."""
     pipeline = _get_pipeline()
     responses = pipeline.classify_batch(body.requests)
     return BatchClassifyResponse(responses=responses)
@@ -213,6 +222,7 @@ async def classify_stream(
     user_prompt: str = Query(..., description="Text to classify"),
     external_context: Optional[str] = Query(None),
 ) -> EventSourceResponse:
+    """Emit one SSE event per pipeline stage as classification progresses."""
     pipeline = _get_pipeline()
 
     async def _event_generator() -> AsyncGenerator[dict[str, Any], None]:
@@ -331,18 +341,21 @@ async def classify_stream(
 
 @app.post("/api/v1/feedback")
 async def submit_feedback(body: FeedbackRequest) -> dict[str, Any]:
+    """Store a human correction for a previous classification decision."""
     store = _get_feedback_store()
     return store.submit_correction(body)
 
 
 @app.get("/api/v1/feedback/stats")
 async def feedback_stats() -> dict[str, Any]:
+    """Return aggregated feedback statistics and retrain-readiness flag."""
     store = _get_feedback_store()
     return store.get_stats()
 
 
 @app.get("/api/v1/rate-limit/stats")
 async def rate_limit_stats() -> dict[str, Any]:
+    """Return current-window request counts and requests-per-minute estimate."""
     elapsed = time.monotonic() - _window_start
     rpm = (_window_requests / elapsed * 60) if elapsed > 0 else 0.0
     return {

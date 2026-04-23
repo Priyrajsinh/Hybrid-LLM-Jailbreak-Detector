@@ -18,6 +18,7 @@ _PERPLEXITY_TOKENIZER: Optional[Any] = None
 
 
 def _load_perplexity_model() -> None:  # pragma: no cover - heavy download path
+    """Download and cache GPT-2 model + tokenizer for perplexity scoring."""
     global _PERPLEXITY_MODEL, _PERPLEXITY_TOKENIZER
     from transformers import (  # type: ignore[attr-defined]
         GPT2LMHeadModel,
@@ -92,6 +93,7 @@ class HybridPipeline:
         perplexity_fn: Optional[Callable[[str, dict[str, Any]], dict[str, Any]]] = None,
         explainer: Optional[TokenExplainer] = None,
     ) -> None:
+        """Wire pipeline components; each defaults to its prod implementation."""
         self._config = config
         self._normalizer = normalizer or InputNormalizer(config)
         self._similarity = similarity or SimilarityGate(config)
@@ -105,6 +107,7 @@ class HybridPipeline:
     def classify(
         self, request: ClassifyRequest, explain: bool = False
     ) -> ClassifyResponse:
+        """Run the full five-layer pipeline and return a ClassifyResponse."""
         # 1. Normalize first (C36)
         normalized, norm_tags = self._normalizer.normalize(request.user_prompt)
         reason_tags: list[str] = list(norm_tags)
@@ -168,5 +171,6 @@ class HybridPipeline:
         return response
 
     def classify_batch(self, requests: list[ClassifyRequest]) -> list[ClassifyResponse]:
+        """Classify a list of requests; every request goes through the full pipeline."""
         # C35: every request gets the full gate stack — no batch shortcuts.
         return [self.classify(r) for r in requests]

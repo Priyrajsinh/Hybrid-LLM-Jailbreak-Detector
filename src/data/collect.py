@@ -263,7 +263,9 @@ def _collect_from_c4(cap: int) -> list[dict[str, Any]]:
     from datasets import load_dataset  # type: ignore[import-untyped]
 
     rows: list[dict[str, Any]] = []
-    ds = load_dataset("allenai/c4", "en", split="validation", streaming=True)  # nosec B615
+    ds = load_dataset(
+        "allenai/c4", "en", split="validation", streaming=True
+    )  # nosec B615
     for i, item in enumerate(ds):
         if len(rows) >= cap:
             break

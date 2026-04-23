@@ -1,22 +1,25 @@
+"""Project-specific exception hierarchy for P1 Hybrid Jailbreak Detector."""
+
+
 class ProjectBaseError(Exception):
-    pass
+    """Base class for all P1 project exceptions."""
 
 
 class DataLoadError(ProjectBaseError):
-    pass
+    """Raised when a dataset or parquet file cannot be loaded."""
 
 
 class ModelNotFoundError(ProjectBaseError):
-    pass
+    """Raised when a required model checkpoint is missing from disk."""
 
 
 class ClassificationError(ProjectBaseError):
-    pass
+    """Raised when the classification pipeline fails unexpectedly."""
 
 
 class PolicyViolationError(ProjectBaseError):
-    pass
+    """Raised when the policy gate detects a hard-block violation."""
 
 
 class SchemaValidationError(ProjectBaseError):
-    pass
+    """Raised when input or output data fails pandera schema validation."""

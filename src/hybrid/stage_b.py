@@ -46,6 +46,7 @@ class StageBJudge:
         model: Optional[Any] = None,
         tokenizer: Optional[Any] = None,
     ) -> None:
+        """Initialise from config; API/local mode controlled by stage_b.use_api."""
         stage_cfg: dict[str, Any] = config["model"]["stage_b"]
         self._model_name: str = str(stage_cfg["model_name"])
         self._enabled: bool = bool(stage_cfg.get("enabled", True))
@@ -56,6 +57,7 @@ class StageBJudge:
         self._logger = get_logger(__name__)
 
     def _ensure_loaded(self) -> None:
+        """Download the gated Llama Guard 3 model on first use."""
         if self._model is not None and self._tokenizer is not None:
             return
         # pragma: no cover - heavy gated model path
@@ -133,6 +135,7 @@ class StageBJudge:
     def _judge_local(
         self, text: str, prompt: str, stage_a_result: dict[str, Any]
     ) -> dict[str, Any]:
+        """Run Llama Guard 3 locally and return the parsed verdict dict."""
         self._ensure_loaded()
         assert self._tokenizer is not None
         assert self._model is not None
@@ -155,6 +158,7 @@ class StageBJudge:
         return verdict
 
     def _build_prompt(self, text: str) -> str:
+        """Build the Llama Guard 3 safety-check prompt for text."""
         cats = "\n".join(f"- {c}" for c in LLAMA_GUARD_CATEGORIES)
         return (
             "Task: Check if the following user message is safe against the "
@@ -166,6 +170,7 @@ class StageBJudge:
 
     @staticmethod
     def _parse_response(response: str) -> dict[str, Any]:
+        """Parse Llama Guard output into {is_safe, violation_categories, risk_score}."""
         lowered = response.lower()
         is_unsafe = "unsafe" in lowered
         is_safe = not is_unsafe

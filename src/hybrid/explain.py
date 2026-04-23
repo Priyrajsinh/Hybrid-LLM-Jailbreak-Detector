@@ -18,6 +18,7 @@ class TokenExplainer:
         tokenizer: Any,
         lig: Optional[Any] = None,
     ) -> None:
+        """Store model/tokenizer; lig is lazily built on first explain() call."""
         self._model = model
         self._tokenizer = tokenizer
         self._lig = lig

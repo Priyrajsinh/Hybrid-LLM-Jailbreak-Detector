@@ -24,6 +24,7 @@ class StageAClassifier:
         model: Optional[Any] = None,
         tokenizer: Optional[Any] = None,
     ) -> None:
+        """Initialise from config; model/tokenizer lazy-load on first classify()."""
         stage_cfg: dict[str, Any] = config["model"]["stage_a"]
         self._model_name: str = str(stage_cfg["model_name"])
         self._max_length: int = int(stage_cfg["max_length"])
@@ -33,6 +34,7 @@ class StageAClassifier:
         self._logger = get_logger(__name__)
 
     def _ensure_loaded(self) -> None:
+        """Download and cache model + tokenizer on first call; no-op thereafter."""
         if self._model is not None and self._tokenizer is not None:
             return
         # pragma: no cover - heavy model download path
@@ -66,6 +68,7 @@ class StageAClassifier:
         )
 
     def classify(self, text: str) -> dict[str, Any]:
+        """Return {label, confidence, probabilities} for text."""
         self._ensure_loaded()
         assert self._tokenizer is not None
         assert self._model is not None
@@ -104,10 +107,12 @@ class StageAClassifier:
         }
 
     def classify_batch(self, texts: list[str]) -> list[dict[str, Any]]:
+        """Classify a list of texts sequentially; returns one result per text."""
         return [self.classify(t) for t in texts]
 
     @staticmethod
     def _rough_token_estimate(text: str) -> int:
+        """Estimate token count via ~4 chars/token to pre-warn before max_length."""
         # ModernBERT uses ~4 chars/token on English — close enough to pre-warn
         # without paying for the real tokenizer.
         return max(1, len(text) // 4)

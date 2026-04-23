@@ -98,7 +98,9 @@ def _log_weave_epoch(
     try:
         import weave
 
-        weave.log({"epoch": epoch, "val_loss": val_loss, "val_acc": val_acc, "val_f1": val_f1})
+        weave.log(
+            {"epoch": epoch, "val_loss": val_loss, "val_acc": val_acc, "val_f1": val_f1}
+        )
     except Exception as exc:  # pragma: no cover
         logger.warning("weave log failed", extra={"err": str(exc)})
 
