@@ -258,47 +258,55 @@ def collect_spml_injections(max_samples: int | None = None) -> pd.DataFrame:
         return pd.DataFrame(columns=SCHEMA_COLUMNS)
 
 
+def _collect_from_c4(cap: int) -> list[dict[str, Any]]:
+    """Return up to cap rows from allenai/c4 validation split."""
+    from datasets import load_dataset  # type: ignore[import-untyped]
+
+    rows: list[dict[str, Any]] = []
+    ds = load_dataset("allenai/c4", "en", split="validation", streaming=True)  # nosec B615
+    for i, item in enumerate(ds):
+        if len(rows) >= cap:
+            break
+        text = str(item.get("text", "")).strip()
+        if len(text) < 20:
+            continue
+        rows.append(_build_row(text[:512], 0, "c4_safe", "web", i))
+    logger.info("c4 safe corpus: %d rows loaded", len(rows))
+    return rows
+
+
+def _collect_from_openwebtext(cap: int) -> list[dict[str, Any]]:
+    """Return up to cap rows from stas/openwebtext-10k as a fallback."""
+    from datasets import load_dataset  # type: ignore[import-untyped]
+
+    rows: list[dict[str, Any]] = []
+    ds = load_dataset("stas/openwebtext-10k", split="train")  # nosec B615
+    for i, item in enumerate(ds):
+        if len(rows) >= cap:
+            break
+        text = str(item.get("text", "")).strip()
+        if len(text) < 20:
+            continue
+        rows.append(_build_row(text[:512], 0, "openwebtext", "web", i))
+    logger.info("openwebtext safe corpus: %d rows loaded", len(rows))
+    return rows
+
+
 def collect_safe_corpus(max_samples: int | None = None) -> pd.DataFrame:
     """
     Load safe/benign text examples from allenai/c4 (en, validation split).
     Fallback: stas/openwebtext-10k. Label=0 (safe).
     """
-    from datasets import load_dataset  # type: ignore[import-untyped]
-
     logger.info("Loading safe corpus")
     cap = max_samples if max_samples is not None else 15000
     rows: list[dict[str, Any]] = []
 
     try:
-        ds = load_dataset(  # nosec B615
-            "allenai/c4",
-            "en",
-            split="validation",
-            streaming=True,
-        )
-        for i, item in enumerate(ds):
-            if len(rows) >= cap:
-                break
-            text = str(item.get("text", "")).strip()
-            if len(text) < 20:
-                continue
-            # Keep only sentences that are clearly safe (short snippet, no commands)
-            snippet = text[:512]
-            rows.append(_build_row(snippet, 0, "c4_safe", "web", i))
-        logger.info("c4 safe corpus: %d rows loaded", len(rows))
+        rows = _collect_from_c4(cap)
     except Exception as exc:
         logger.warning("c4 unavailable (%s), falling back to openwebtext-10k", exc)
         try:
-            ds2 = load_dataset("stas/openwebtext-10k", split="train")  # nosec B615
-            for i, item in enumerate(ds2):
-                if len(rows) >= cap:
-                    break
-                text = str(item.get("text", "")).strip()
-                if len(text) < 20:
-                    continue
-                snippet = text[:512]
-                rows.append(_build_row(snippet, 0, "openwebtext", "web", i))
-            logger.info("openwebtext safe corpus: %d rows loaded", len(rows))
+            rows = _collect_from_openwebtext(cap)
         except Exception as exc2:
             logger.error("Both safe corpus sources failed: %s", exc2)
 
@@ -351,6 +359,36 @@ def collect_safe_questions(max_samples: int | None = None) -> pd.DataFrame:
     return pd.DataFrame(columns=SCHEMA_COLUMNS)
 
 
+_SOURCE_DISPATCH: dict[str, Any] = {
+    "jailbreakbench": "collect_jailbreakbench",
+    "advbench": "collect_advbench",
+    "advbench_csv": "collect_advbench_csv",
+    "wildjailbreak": "collect_jackhhao_jailbreak",
+    "jackhhao": "collect_jackhhao_jailbreak",
+    "deepset_prompt_injections": "collect_prompt_injections",
+    "bipia_slices": "collect_spml_injections",
+    "spml_injections": "collect_spml_injections",
+    "safe_corpus": "collect_safe_corpus",
+    "safe_questions": "collect_safe_questions",
+}
+
+
+def _collect_frames(
+    sources: list[str], max_per_source: int | None
+) -> list[pd.DataFrame]:
+    """Dispatch each source name to its collector function; return collected frames."""
+    import sys
+
+    module = sys.modules[__name__]
+    frames: list[pd.DataFrame] = []
+    for src in sources:
+        fn_name = _SOURCE_DISPATCH.get(src)
+        if fn_name is not None:
+            fn = getattr(module, fn_name)
+            frames.append(fn(max_per_source))
+    return frames
+
+
 def collect_all_sources(config: dict[str, Any]) -> pd.DataFrame:
     """
     Merge all 5 sources into a unified DataFrame with the canonical schema.
@@ -375,28 +413,7 @@ def collect_all_sources(config: dict[str, Any]) -> pd.DataFrame:
 
     logger.info("Collecting data from sources: %s", sources)
 
-    frames: list[pd.DataFrame] = []
-
-    if "jailbreakbench" in sources:
-        frames.append(collect_jailbreakbench(max_per_source))
-    if "advbench" in sources:
-        frames.append(collect_advbench(max_per_source))
-    if "advbench_csv" in sources:
-        frames.append(collect_advbench_csv(max_per_source))
-    if "wildjailbreak" in sources:
-        frames.append(collect_jackhhao_jailbreak(max_per_source))
-    if "jackhhao" in sources:
-        frames.append(collect_jackhhao_jailbreak(max_per_source))
-    if "deepset_prompt_injections" in sources:
-        frames.append(collect_prompt_injections(max_per_source))
-    if "bipia_slices" in sources:
-        frames.append(collect_spml_injections(max_per_source))
-    if "spml_injections" in sources:
-        frames.append(collect_spml_injections(max_per_source))
-    if "safe_corpus" in sources:
-        frames.append(collect_safe_corpus(max_per_source))
-    if "safe_questions" in sources:
-        frames.append(collect_safe_questions(max_per_source))
+    frames = _collect_frames(sources, max_per_source)
 
     if not frames:
         logger.warning("No source frames collected — returning empty DataFrame")
