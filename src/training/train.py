@@ -72,6 +72,104 @@ def _tokenize_dataset(
     return _DS()
 
 
+def _early_stop_check(
+    val_loss: float,
+    best_val_loss: float,
+    bad_epochs: int,
+    patience: int,
+    epoch: int,
+) -> tuple[float, int, bool]:
+    """Update early-stopping counters; return (new_best_loss, new_bad_epochs, stop)."""
+    if val_loss < best_val_loss:
+        return val_loss, 0, False
+    bad_epochs += 1
+    stop = bad_epochs >= patience
+    if stop:
+        logger.info("early stopping", extra={"epoch": epoch, "patience": patience})
+    return best_val_loss, bad_epochs, stop
+
+
+def _log_weave_epoch(
+    epoch: int, val_loss: float, val_acc: float, val_f1: float
+) -> None:
+    """Optionally emit epoch metrics to W&B Weave when ENABLE_WEAVE=1."""
+    if os.environ.get("ENABLE_WEAVE") != "1":
+        return
+    try:
+        import weave
+
+        weave.log({"epoch": epoch, "val_loss": val_loss, "val_acc": val_acc, "val_f1": val_f1})
+    except Exception as exc:  # pragma: no cover
+        logger.warning("weave log failed", extra={"err": str(exc)})
+
+
+def _run_train_epoch(
+    model: Any,
+    train_loader: Any,
+    optimizer: Any,
+    scheduler: Any,
+    loss_fn: Any,
+    device: Any,
+) -> float:
+    """Run one full training epoch; return cumulative loss."""
+    import torch
+    from torch import nn
+
+    model.train()
+    epoch_loss = 0.0
+    for batch in train_loader:
+        batch = {k: v.to(device) for k, v in batch.items()}
+        optimizer.zero_grad()
+        with torch.autocast(device.type, enabled=(device.type == "cuda")):
+            out = model(
+                input_ids=batch["input_ids"],
+                attention_mask=batch["attention_mask"],
+            )
+            loss = loss_fn(out.logits, batch["labels"])
+        loss.backward()
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        optimizer.step()
+        scheduler.step()
+        epoch_loss += float(loss.item())
+    return epoch_loss
+
+
+def _run_validation(
+    model: Any,
+    val_loader: Any,
+    loss_fn: Any,
+    device: Any,
+) -> tuple[float, float, float]:
+    """Run validation; return (val_loss, val_acc, val_f1)."""
+    import torch
+    from sklearn.metrics import f1_score
+
+    model.eval()
+    val_loss = 0.0
+    correct = 0
+    seen = 0
+    all_preds: list[int] = []
+    all_labels: list[int] = []
+    with torch.no_grad():
+        for batch in val_loader:
+            batch = {k: v.to(device) for k, v in batch.items()}
+            with torch.autocast(device.type, enabled=(device.type == "cuda")):
+                out = model(
+                    input_ids=batch["input_ids"],
+                    attention_mask=batch["attention_mask"],
+                )
+                val_loss += float(loss_fn(out.logits, batch["labels"]).item())
+            preds = out.logits.argmax(dim=-1)
+            correct += int((preds == batch["labels"]).sum().item())
+            seen += int(batch["labels"].shape[0])
+            all_preds.extend([int(x) for x in preds.cpu().tolist()])
+            all_labels.extend([int(x) for x in batch["labels"].cpu().tolist()])
+
+    val_acc = correct / max(seen, 1)
+    val_f1 = float(f1_score(all_labels, all_preds, average="macro", zero_division=0))
+    return val_loss, val_acc, val_f1
+
+
 def train_stage_a(config: dict[str, Any]) -> None:
     """Train ModernBERT + LoRA Stage A classifier.
 
@@ -81,7 +179,6 @@ def train_stage_a(config: dict[str, Any]) -> None:
     import mlflow
     import torch
     from peft import LoraConfig, TaskType, get_peft_model
-    from sklearn.metrics import f1_score
     from torch import nn
     from torch.optim import AdamW
     from torch.utils.data import DataLoader
@@ -188,50 +285,13 @@ def train_stage_a(config: dict[str, Any]) -> None:
         best_val_f1 = 0.0
         bad_epochs = 0
         for epoch in range(epochs):
-            model.train()
-            epoch_loss = 0.0
-            for batch in train_loader:
-                batch = {k: v.to(device) for k, v in batch.items()}
-                optimizer.zero_grad()
-                with torch.autocast(device.type, enabled=(device.type == "cuda")):
-                    out = model(
-                        input_ids=batch["input_ids"],
-                        attention_mask=batch["attention_mask"],
-                    )
-                    loss = loss_fn(out.logits, batch["labels"])
-                loss.backward()
-                nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                optimizer.step()
-                scheduler.step()
-                epoch_loss += float(loss.item())
-
-            model.eval()
-            val_loss = 0.0
-            correct = 0
-            seen = 0
-            all_preds: list[int] = []
-            all_labels_val: list[int] = []
-            with torch.no_grad():
-                for batch in val_loader:
-                    batch = {k: v.to(device) for k, v in batch.items()}
-                    with torch.autocast(device.type, enabled=(device.type == "cuda")):
-                        out = model(
-                            input_ids=batch["input_ids"],
-                            attention_mask=batch["attention_mask"],
-                        )
-                        val_loss += float(loss_fn(out.logits, batch["labels"]).item())
-                    preds = out.logits.argmax(dim=-1)
-                    correct += int((preds == batch["labels"]).sum().item())
-                    seen += int(batch["labels"].shape[0])
-                    all_preds.extend([int(x) for x in preds.cpu().tolist()])
-                    all_labels_val.extend(
-                        [int(x) for x in batch["labels"].cpu().tolist()]
-                    )
-
-            val_acc = correct / max(seen, 1)
-            val_f1 = float(
-                f1_score(all_labels_val, all_preds, average="macro", zero_division=0)
+            epoch_loss = _run_train_epoch(
+                model, train_loader, optimizer, scheduler, loss_fn, device
             )
+            val_loss, val_acc, val_f1 = _run_validation(
+                model, val_loader, loss_fn, device
+            )
+
             if val_f1 > best_val_f1:
                 best_val_f1 = val_f1
             logger.info(
@@ -249,31 +309,13 @@ def train_stage_a(config: dict[str, Any]) -> None:
             mlflow.log_metric("val_acc", val_acc, step=epoch)
             mlflow.log_metric("val_f1", val_f1, step=epoch)
 
-            if os.environ.get("ENABLE_WEAVE") == "1":
-                try:
-                    import weave
+            _log_weave_epoch(epoch, val_loss, val_acc, val_f1)
 
-                    weave.log(
-                        {
-                            "epoch": epoch,
-                            "val_loss": val_loss,
-                            "val_acc": val_acc,
-                            "val_f1": val_f1,
-                        }
-                    )
-                except Exception as exc:  # pragma: no cover
-                    logger.warning("weave log failed", extra={"err": str(exc)})
-
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                bad_epochs = 0
-            else:
-                bad_epochs += 1
-                if bad_epochs >= patience:
-                    logger.info(
-                        "early stopping", extra={"epoch": epoch, "patience": patience}
-                    )
-                    break
+            best_val_loss, bad_epochs, stop = _early_stop_check(
+                val_loss, best_val_loss, bad_epochs, patience, epoch
+            )
+            if stop:
+                break
 
         mlflow.log_metric("best_val_f1", best_val_f1)
 

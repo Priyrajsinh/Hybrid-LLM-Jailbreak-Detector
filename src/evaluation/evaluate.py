@@ -416,6 +416,50 @@ def _time_stage_a_onnx(config: dict[str, Any], texts: list[str]) -> list[float]:
 # ---------------------------------------------------------------------------
 
 
+def _save_one_attribution(
+    i: int,
+    text: str,
+    explainer: Optional[Any],
+    figures_dir: str,
+) -> None:
+    """Save HTML and PNG attribution files for a single sample."""
+    import matplotlib.pyplot as plt
+
+    attributions: list[dict[str, str | float]] = []
+    try:
+        if explainer is not None:
+            raw = explainer.explain(text)
+            attributions = [
+                {"token": str(item["token"]), "score": float(item["score"])}
+                for item in raw
+            ]
+    except Exception as exc:
+        logger.warning("attribution_failed", extra={"i": i, "err": str(exc)})
+
+    html_path = os.path.join(figures_dir, f"token_attribution_sample_{i}.html")
+    with open(html_path, "w", encoding="utf-8") as fh:
+        fh.write(_render_attribution_html(text, attributions))
+
+    png_path = os.path.join(figures_dir, f"token_attribution_sample_{i}.png")
+    tokens = [str(a["token"]) for a in attributions[:20]]
+    scores = [float(a["score"]) for a in attributions[:20]]
+    if tokens:
+        colors = ["red" if s > 0 else "blue" for s in scores]
+        fig, ax = plt.subplots(figsize=(max(6, len(tokens) * 0.5), 4))
+        ax.bar(range(len(tokens)), scores, color=colors)
+        ax.set_xticks(list(range(len(tokens))))
+        ax.set_xticklabels(tokens, rotation=45, ha="right", fontsize=8)
+        ax.set_ylabel("Attribution Score")
+        ax.set_title(f"Token Attribution — sample {i}")
+    else:
+        fig, ax = plt.subplots(figsize=(4, 2))
+        ax.text(0.5, 0.5, "No attributions", ha="center", va="center")
+        ax.axis("off")
+    plt.tight_layout()
+    fig.savefig(png_path)
+    plt.close(fig)
+
+
 def generate_explainability_samples(
     pipeline: Any,
     test_data: Any,
@@ -434,7 +478,6 @@ def generate_explainability_samples(
     import matplotlib
 
     matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
 
     os.makedirs(figures_dir, exist_ok=True)
 
@@ -450,44 +493,7 @@ def generate_explainability_samples(
     explainer = _build_explainer(pipeline)
 
     for i, text in enumerate(samples):
-        attributions: list[dict[str, str | float]] = []
-        try:
-            if explainer is not None:
-                raw = explainer.explain(text)
-                attributions = [
-                    {
-                        "token": str(item["token"]),
-                        "score": float(item["score"]),
-                    }
-                    for item in raw
-                ]
-        except Exception as exc:
-            logger.warning("attribution_failed", extra={"i": i, "err": str(exc)})
-
-        # HTML
-        html_path = os.path.join(figures_dir, f"token_attribution_sample_{i}.html")
-        with open(html_path, "w", encoding="utf-8") as fh:
-            fh.write(_render_attribution_html(text, attributions))
-
-        # PNG
-        png_path = os.path.join(figures_dir, f"token_attribution_sample_{i}.png")
-        tokens = [str(a["token"]) for a in attributions[:20]]
-        scores = [float(a["score"]) for a in attributions[:20]]
-        if tokens:
-            colors = ["red" if s > 0 else "blue" for s in scores]
-            fig, ax = plt.subplots(figsize=(max(6, len(tokens) * 0.5), 4))
-            ax.bar(range(len(tokens)), scores, color=colors)
-            ax.set_xticks(list(range(len(tokens))))
-            ax.set_xticklabels(tokens, rotation=45, ha="right", fontsize=8)
-            ax.set_ylabel("Attribution Score")
-            ax.set_title(f"Token Attribution — sample {i}")
-        else:
-            fig, ax = plt.subplots(figsize=(4, 2))
-            ax.text(0.5, 0.5, "No attributions", ha="center", va="center")
-            ax.axis("off")
-        plt.tight_layout()
-        fig.savefig(png_path)
-        plt.close(fig)
+        _save_one_attribution(i, text, explainer, figures_dir)
 
     logger.info(
         "explainability_samples_saved",
@@ -540,6 +546,85 @@ def _render_attribution_html(
         "<html><head><meta charset='utf-8'></head>"
         f"<body style='font-family:monospace;padding:16px'>{body}</body></html>"
     )
+
+
+# ---------------------------------------------------------------------------
+# compare_baseline_vs_hybrid helpers
+# ---------------------------------------------------------------------------
+
+
+def _merge_results_json(
+    results_path: str,
+    baseline_row: dict[str, str | float],
+    hybrid_row: dict[str, str | float],
+) -> None:
+    """Load (or create) results.json and upsert the two benchmark rows."""
+    os.makedirs(os.path.dirname(results_path), exist_ok=True)
+    if os.path.exists(results_path):
+        with open(results_path) as f:
+            results: dict[str, Any] = json.load(f)
+        results["benchmarks"] = [
+            b
+            for b in results.get("benchmarks", [])
+            if b.get("model")
+            not in (str(baseline_row["model"]), str(hybrid_row["model"]))
+        ]
+        results["benchmarks"].extend([baseline_row, hybrid_row])
+    else:
+        results = {
+            "project": "P1-Hybrid-Jailbreak-Detector",
+            "benchmarks": [baseline_row, hybrid_row],
+        }
+    with open(results_path, "w") as f:
+        json.dump(results, f, indent=2)
+    logger.info("results_json_updated", extra={"path": results_path})
+
+
+def _print_comparison_table(
+    baseline_row: dict[str, str | float],
+    hybrid_row: dict[str, str | float],
+    scalar_keys: list[str],
+) -> None:
+    """Print a formatted comparison table to stdout."""
+    print("\n=== Baseline vs Hybrid Comparison ===")
+    col_w, num_w = 38, 14
+    print("  ".join([f"{'Model':{col_w}}"] + [f"{c:{num_w}}" for c in scalar_keys]))
+    for row in (baseline_row, hybrid_row):
+        row_parts = [f"{str(row['model']):{col_w}}"] + [
+            f"{float(row[k]):{num_w}.4f}"  # type: ignore[arg-type]
+            for k in scalar_keys
+        ]
+        print("  ".join(row_parts))
+
+
+def _plot_comparison_chart(
+    baseline_row: dict[str, str | float],
+    hybrid_row: dict[str, str | float],
+    figures_dir: str,
+) -> None:
+    """Save a grouped bar chart comparing baseline vs hybrid to figures_dir."""
+    import matplotlib.pyplot as plt
+
+    metrics_to_plot = ["accuracy", "weighted_f1", "jailbreak_recall", "indirect_recall"]
+    x = np.arange(len(metrics_to_plot))
+    width = 0.35
+    baseline_vals = [float(baseline_row[m]) for m in metrics_to_plot]  # type: ignore[arg-type]
+    hybrid_vals = [float(hybrid_row[m]) for m in metrics_to_plot]  # type: ignore[arg-type]
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.bar(x - width / 2, baseline_vals, width, label="Baseline", color="steelblue")
+    ax.bar(x + width / 2, hybrid_vals, width, label="Hybrid (Stage A)", color="coral")
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(metrics_to_plot, rotation=15, ha="right")
+    ax.set_ylim(0, 1.1)
+    ax.set_ylabel("Score")
+    ax.set_title("Baseline vs Hybrid Comparison")
+    ax.legend()
+    plt.tight_layout()
+    cmp_path = os.path.join(figures_dir, "baseline_vs_hybrid.png")
+    fig.savefig(cmp_path)
+    plt.close(fig)
+    logger.info("baseline_vs_hybrid_chart_saved", extra={"path": cmp_path})
 
 
 # ---------------------------------------------------------------------------
@@ -619,76 +704,10 @@ def compare_baseline_vs_hybrid(
         "date": today,
     }
 
-    # Update results.json
-    os.makedirs(os.path.dirname(results_path), exist_ok=True)
-    if os.path.exists(results_path):
-        with open(results_path) as f:
-            results: dict[str, Any] = json.load(f)
-        results["benchmarks"] = [
-            b
-            for b in results.get("benchmarks", [])
-            if b.get("model")
-            not in (
-                str(baseline_row["model"]),
-                str(hybrid_row["model"]),
-            )
-        ]
-        results["benchmarks"].extend([baseline_row, hybrid_row])
-    else:
-        results = {
-            "project": "P1-Hybrid-Jailbreak-Detector",
-            "benchmarks": [baseline_row, hybrid_row],
-        }
+    _merge_results_json(results_path, baseline_row, hybrid_row)
+    _print_comparison_table(baseline_row, hybrid_row, _scalar_keys)
+    _plot_comparison_chart(baseline_row, hybrid_row, figures_dir)
 
-    with open(results_path, "w") as f:
-        json.dump(results, f, indent=2)
-    logger.info("results_json_updated", extra={"path": results_path})
-
-    # Print comparison table
-    print("\n=== Baseline vs Hybrid Comparison ===")
-    col_w = 38
-    num_w = 14
-    header_parts = [f"{'Model':{col_w}}"] + [f"{c:{num_w}}" for c in _scalar_keys]
-    print("  ".join(header_parts))
-    for row in (baseline_row, hybrid_row):
-        row_parts = [f"{str(row['model']):{col_w}}"] + [
-            f"{float(row[k]):{num_w}.4f}"  # type: ignore[arg-type]
-            for k in _scalar_keys
-        ]
-        print("  ".join(row_parts))
-
-    # Comparison bar chart
-    metrics_to_plot = [
-        "accuracy",
-        "weighted_f1",
-        "jailbreak_recall",
-        "indirect_recall",
-    ]
-    x = np.arange(len(metrics_to_plot))
-    width = 0.35
-    baseline_vals = [
-        float(baseline_row[m]) for m in metrics_to_plot  # type: ignore[arg-type]
-    ]
-    hybrid_vals = [
-        float(hybrid_row[m]) for m in metrics_to_plot  # type: ignore[arg-type]
-    ]
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.bar(x - width / 2, baseline_vals, width, label="Baseline", color="steelblue")
-    ax.bar(x + width / 2, hybrid_vals, width, label="Hybrid (Stage A)", color="coral")
-    ax.set_xticks(list(x))
-    ax.set_xticklabels(metrics_to_plot, rotation=15, ha="right")
-    ax.set_ylim(0, 1.1)
-    ax.set_ylabel("Score")
-    ax.set_title("Baseline vs Hybrid Comparison")
-    ax.legend()
-    plt.tight_layout()
-    cmp_path = os.path.join(figures_dir, "baseline_vs_hybrid.png")
-    fig.savefig(cmp_path)
-    plt.close(fig)
-    logger.info("baseline_vs_hybrid_chart_saved", extra={"path": cmp_path})
-
-    # W&B Weave logging (optional, C7/weave config)
     if config.get("weave", {}).get("enabled", False):
         try:
             import weave  # type: ignore[import-untyped]
