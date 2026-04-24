@@ -48,6 +48,7 @@ feedback:
 
 onnx:
   export_path: "models/stage_a_onnx/"
+  model_file: "model_int8.onnx"
   optimize: true
 
 training:
