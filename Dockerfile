@@ -11,13 +11,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-# Strip bare 'torch' line (handles both LF and CRLF) then install CPU-only
-# torch once. Without sed, requirements.txt re-resolves 'torch' from PyPI
-# and downloads the 2 GB CUDA build even though CPU torch is already present.
+# Download CPU torch wheel to disk first, then install everything in ONE pip
+# invocation. Single resolver = when tokenizers/transformers declare
+# torch>=1.13.0, pip sees the local CPU wheel already queued and does NOT
+# fetch the 530 MB CUDA build from PyPI.
 RUN sed -i '/^torch\r\?$/d' requirements.txt && \
+    pip download --no-deps --no-cache-dir \
+        torch --index-url https://download.pytorch.org/whl/cpu \
+        --dest /tmp/wheels && \
     pip install --no-cache-dir --prefix=/install \
-        torch --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir --prefix=/install -r requirements.txt
+        /tmp/wheels/torch-*.whl \
+        -r requirements.txt
 
 # Stage 2: runtime — lean image, non-root user
 FROM python:3.10-slim AS runtime
