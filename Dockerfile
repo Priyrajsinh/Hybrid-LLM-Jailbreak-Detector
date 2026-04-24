@@ -11,16 +11,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-# Strip bare 'torch' line then install CPU-only torch once.
-# Without sed, requirements.txt pip step re-resolves 'torch' from PyPI and
-# downloads the 2 GB CUDA build even though CPU torch is already present.
-RUN sed -i '/^torch$/d' requirements.txt && \
+# Strip bare 'torch' line (handles both LF and CRLF) then install CPU-only
+# torch once. Without sed, requirements.txt re-resolves 'torch' from PyPI
+# and downloads the 2 GB CUDA build even though CPU torch is already present.
+RUN sed -i '/^torch\r\?$/d' requirements.txt && \
     pip install --no-cache-dir --prefix=/install \
         torch --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # Stage 2: runtime — lean image, non-root user
 FROM python:3.10-slim AS runtime
+
+# libgomp1: OpenMP runtime needed by scikit-learn and faiss-cpu at import time.
+# The builder has it via gcc, but the runtime stage does not inherit it.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages from builder
 COPY --from=builder /install /usr/local
